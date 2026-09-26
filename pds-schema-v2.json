@@ -1,0 +1,35 @@
+{
+  "version": "v2-firebase",
+  "collections": {
+    "plans": {
+      "fields": "id, created_at, original{title,period_start,period_end,priority,success_criteria,estimated_hours,created_at}, current{같은 필드+updated_at}, edit_history[](수정 전 current 스냅샷), carry_forward_note",
+      "rule": "original은 생성 시 한 번만 저장되고 이후 절대 수정하지 않는다. current는 수정할 때마다 이전 current를 edit_history에 먼저 쌓고 덮어쓴다."
+    },
+    "todos": {
+      "fields": "id, plan_id, title, created_at, updated_at, deadline, priority(high|mid|low), tags[], estimated_minutes, status(todo|done), completed_at"
+    },
+    "executions": {
+      "fields": "id, todo_id, start_at, end_at, actual_minutes(=round((end-start)/60000)), blocked_reason, created_at",
+      "rule": "완료 처리는 todo.status가 이미 done이면 아무 것도 하지 않는다(연타해도 실행 기록 1건만 늘어남)."
+    },
+    "carryovers": {
+      "fields": "id, note, created_at, from_plan_id",
+      "rule": "돌아보기에서 저장한 한 줄은 계획 탭에 최근 메모로 노출되어 다음 계획에 반영할 수 있다."
+    }
+  },
+  "aggregation_rules": {
+    "scope": "돌아보기는 특정 계획(plan_id)에 딸린 할 일들을 대상으로 집계한다",
+    "planned_count": "해당 계획에 연결된, 삭제되지 않은 할 일 수",
+    "completed_count": "그중 status===done 인 할 일 수",
+    "delayed_count": "완료되지 않았고 deadline이 서울 기준 오늘보다 이전인 할 일 수(완료된 항목은 절대 포함하지 않음)",
+    "blocked_count": "실행 기록 중 blocked_reason이 하나라도 있는 할 일 수",
+    "estimated_total_minutes": "대상 할 일의 estimated_minutes 합",
+    "actual_total_minutes": "대상 할 일에 연결된 실행 기록의 actual_minutes 합",
+    "time_diff_minutes": "actual_total - estimated_total, 아무것도 없으면 0",
+    "drilldown": "각 집계 숫자를 클릭하면 근거가 된 할 일/실행 기록 목록이 펼쳐진다"
+  },
+  "no_login_notice": "index.html(과제 제출용)에는 로그인이 없다. 링크를 아는 사람은 누구나 볼 수 있으므로 남이 봐도 괜찮은 내용만 입력한다.",
+  "export": "내보내기 버튼으로 plans/todos/executions/carryovers 전체를 JSON 파일 하나로 다운로드한다.",
+  "xss_note": "모든 사용자 입력은 innerHTML 삽입 전 esc()로 이스케이프한다. firebaseConfig의 apiKey는 비밀키가 아니라 클라이언트 식별용 공개 값이며, 실제 접근 제어는 Firestore 보안 규칙(firestore.rules)이 담당한다.",
+  "storage": "Firebase Firestore(프로젝트 plan-do-see-bd6d1)를 백엔드로 사용한다. index.html은 공개 컬렉션 plans/todos/executions/carryovers를 읽고 쓴다(로그인 없음, 과제 제출 요구사항). private.html은 Firebase Authentication(이메일/비밀번호) 로그인 후 users/{uid}/... 경로에만 접근하는 개인용 페이지다. 두 페이지는 같은 GitHub 저장소에서 GitHub Pages로 배포되어 결과물 주소와 소스 주소가 동일하다."
+}

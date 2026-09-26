@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>플랜두씨 다이어리 — 과제6</title>
+<style>
+  :root{--bg:#0f172a;--panel:#111827;--accent:#6366f1;--text:#e5e7eb;--muted:#9ca3af;--danger:#ef4444;--ok:#22c55e;--warn:#f59e0b;--border:#1f2937;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Malgun Gothic',-apple-system,sans-serif;background:var(--bg);color:var(--text);}
+  .wrap{max-width:920px;margin:0 auto;padding:16px;}
+  .notice{background:#452a06;border:1px solid var(--warn);color:#fde68a;padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:14px;line-height:1.5;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
+  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+  .tab-btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;}
+  .tab-btn.active{background:var(--accent);border-color:var(--accent);}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:15px;}
+  label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px;}
+  input,select,textarea{width:100%;background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px;font-size:13px;font-family:inherit;}
+  textarea{min-height:60px;resize:vertical;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:140px;}
+  button.btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;margin-top:10px;}
+  button.btn.secondary{background:#374151;}
+  button.btn.danger{background:var(--danger);}
+  button.btn.small{padding:5px 9px;font-size:12px;margin:2px 4px 2px 0;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  .list-item{border-top:1px solid var(--border);padding:8px 0;font-size:13px;}
+  .list-item:first-child{border-top:none;}
+  .tag{display:inline-block;background:#1f2937;color:#c7d2fe;border-radius:5px;padding:2px 7px;font-size:11px;margin-right:4px;}
+  .badge{display:inline-block;border-radius:5px;padding:2px 7px;font-size:11px;}
+  .badge.done{background:#052e16;color:var(--ok);}
+  .badge.todo{background:#1e293b;color:var(--muted);}
+  .muted{color:var(--muted);font-size:12px;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:10px 0;}
+  .stat{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;}
+  .stat .num{font-size:22px;font-weight:700;}
+  .stat .label{font-size:11px;color:var(--muted);}
+  .drill{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;font-size:12px;}
+  .footer-note{font-size:11px;color:var(--muted);margin-top:20px;}
+  summary{cursor:pointer;color:var(--muted);font-size:12px;}
+  pre{white-space:pre-wrap;font-size:11px;color:var(--muted);}
+  a{color:#93c5fd;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="notice">지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요.</div>
+  <h1>플랜두씨 다이어리</h1>
+  <div class="sub">계획(Plan) → 실제로 한 일(Do) → 돌아보기(See)가 하나로 이어지는 나만의 다이어리 · <a href="private.html">개인용(로그인) 버전</a></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="app"><p class="muted">불러오는 중...</p></div>
+  <details class="card">
+    <summary>데이터 스키마 (contracts/pds-schema-v2.json)</summary>
+    <pre id="schema-pre"></pre>
+  </details>
+  <div class="footer-note">과제 6 · 플랜두씨 다이어리 1 · 로그인 없음 · Firebase Firestore에 실시간 저장(GitHub Pages + Firestore).</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc, getDocs
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfx02D2-iJhdmTPnQJ8K0HaLMrzIO9E0o",
+  authDomain: "plan-do-see-bd6d1.firebaseapp.com",
+  projectId: "plan-do-see-bd6d1",
+  storageBucket: "plan-do-see-bd6d1.firebasestorage.app",
+  messagingSenderId: "891274974283",
+  appId: "1:891274974283:web:53fe4b19fe27944c8aa9ce",
+  measurementId: "G-71CM570CRR"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const $ = (sel,root=document)=>root.querySelector(sel);
+const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function genId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('id-'+Date.now()+'-'+Math.random().toString(16).slice(2)); }
+function now(){ return Date.now(); }
+function todayKST(){ const f = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}); return f.format(new Date()); }
+function fmtDT(ms){ if(!ms) return '-'; try{ return new Date(ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false}); }catch(e){ return '-'; } }
+function fmtMin(m){ return (m==null||isNaN(m)) ? '-' : (m+'분'); }
+function prLabel(v){ return v==='high'?'높음':v==='low'?'낮음':'보통'; }
+
+let STATE = {plans:[], todos:[], executions:[], carryovers:[]};
+let activeTab='plan', selectedPlanId=null, openDrill=null, busy=false;
+let todoFilters = {plan:'all', status:'all', q:'', sort:'created'};
+
+const SCHEMA = {
+  version: "v2",
+  storage: "Firebase Firestore (프로젝트 plan-do-see) — 컬렉션 plans/todos/executions/carryovers, 문서 하나당 항목 하나. 로그인 없이 누구나 읽고 쓸 수 있는 테스트 모드 규칙.",
+  collections: {
+    plans: "id, created_at, original{title,period_start,period_end,priority,success_criteria,estimated_hours,created_at}, current{같은 필드+updated_at}, edit_history[], carry_forward_note",
+    todos: "id, plan_id, title, created_at, updated_at, deadline, priority(high|mid|low), tags[], estimated_minutes, status(todo|done), completed_at",
+    executions: "id, todo_id, start_at, end_at, actual_minutes(=round((end-start)/60000)), blocked_reason, created_at",
+    carryovers: "id, note, created_at, from_plan_id"
+  },
+  aggregation_rules: {
+    scope: "돌아보기는 특정 계획(plan_id)에 딸린 할 일들을 대상으로 집계한다",
+    planned_count: "해당 계획에 연결된, 삭제되지 않은 할 일 수",
+    completed_count: "그중 status===done 인 할 일 수",
+    delayed_count: "완료되지 않았고 deadline이 서울 기준 오늘보다 이전인 할 일 수(완료된 항목은 절대 포함하지 않음)",
+    blocked_count: "실행 기록 중 blocked_reason이 하나라도 있는 할 일 수",
+    estimated_total_minutes: "대상 할 일의 estimated_minutes 합",
+    actual_total_minutes: "대상 할 일에 연결된 실행 기록의 actual_minutes 합",
+    time_diff_minutes: "actual_total - estimated_total, 아무것도 없으면 0",
+    drilldown: "각 집계 숫자를 클릭하면 근거가 된 할 일/실행 기록 목록이 펼쳐진다"
+  },
+  no_login_notice: "이 과제에는 로그인이 없다. 링크를 아는 사람은 누구나 볼 수 있으므로 남이 봐도 괜찮은 내용만 입력한다. 잠금은 7번 과제에서 구현한다.",
+  xss_note: "모든 사용자 입력은 innerHTML 삽입 전 esc()로 이스케이프한다. 코드에 비밀키/토큰이 없고 firebaseConfig는 공개 클라이언트 식별자일 뿐 비밀값이 아니다."
+};
+
+async function refreshAll(){
+  const [ps, ts, es, cs] = await Promise.all([
+    getDocs(collection(db,'plans')),
+    getDocs(collection(db,'todos')),
+    getDocs(collection(db,'executions')),
+    getDocs(collection(db,'carryovers')),
+  ]);
+  STATE.plans = ps.docs.map(d=>d.data());
+  STATE.todos = ts.docs.map(d=>d.data());
+  STATE.executions = es.docs.map(d=>d.data());
+  STATE.carryovers = cs.docs.map(d=>d.data());
+  busy = false;
+  render();
+}
+
+// ---------- data ops ----------
+async function addPlan(d){
+  const id = genId(); const t = now();
+  const snap = {title:d.title, period_start:d.period_start, period_end:d.period_end, priority:d.priority, success_criteria:d.success_criteria, estimated_hours:d.estimated_hours};
+  const data = {id, created_at:t, original:Object.assign({},snap,{created_at:t}), current:Object.assign({},snap,{updated_at:t}), edit_history:[], carry_forward_note:''};
+  await setDoc(doc(db,'plans',id), data);
+  await refreshAll();
+}
+async function editPlan(id,d){
+  const p = STATE.plans.find(x=>x.id===id); if(!p) return;
+  const newHistory = p.edit_history.concat([Object.assign({}, p.current, {edited_at: now()})]);
+  const newCurrent = {title:d.title, period_start:d.period_start, period_end:d.period_end, priority:d.priority, success_criteria:d.success_criteria, estimated_hours:d.estimated_hours, updated_at: now()};
+  await setDoc(doc(db,'plans',id), Object.assign({}, p, {current:newCurrent, edit_history:newHistory}));
+  await refreshAll();
+}
+async function addTodo(d){
+  const id=genId(); const t=now();
+  const data = {id, plan_id:d.plan_id, title:d.title, created_at:t, updated_at:t, deadline:d.deadline||null, priority:d.priority, tags:d.tags||[], estimated_minutes:d.estimated_minutes||0, status:'todo', completed_at:null};
+  await setDoc(doc(db,'todos',id), data);
+  await refreshAll();
+}
+async function editTodo(id,d){
+  const t = STATE.todos.find(x=>x.id===id); if(!t) return;
+  const data = Object.assign({}, t, {title:d.title, deadline:d.deadline||null, priority:d.priority, tags:d.tags||[], estimated_minutes:d.estimated_minutes||0, updated_at: now()});
+  await setDoc(doc(db,'todos',id), data);
+  await refreshAll();
+}
+async function toggleTodo(id){
+  const t = STATE.todos.find(x=>x.id===id); if(!t) return;
+  const data = Object.assign({}, t);
+  if(data.status==='done'){ data.status='todo'; data.completed_at=null; } else { data.status='done'; data.completed_at=now(); }
+  data.updated_at = now();
+  await setDoc(doc(db,'todos',id), data);
+  await refreshAll();
+}
+async function deleteTodo(id){
+  await deleteDoc(doc(db,'todos',id));
+  const execs = STATE.executions.filter(x=>x.todo_id===id);
+  await Promise.all(execs.map(e=>deleteDoc(doc(db,'executions',e.id))));
+  await refreshAll();
+}
+async function addExecution(todoId,startMs,endMs,blockedReason){
+  const id = genId();
+  const data = {id, todo_id:todoId, start_at:startMs, end_at:endMs, actual_minutes: Math.max(0, Math.round((endMs-startMs)/60000)), blocked_reason: (blockedReason||'').trim() || null, created_at: now()};
+  await setDoc(doc(db,'executions',id), data);
+}
+async function completeTodo(todoId,startMs,endMs,blockedReason){
+  const t = STATE.todos.find(x=>x.id===todoId); if(!t) return false;
+  if(t.status==='done') return false;
+  await addExecution(todoId,startMs,endMs,blockedReason);
+  const data = Object.assign({}, t, {status:'done', completed_at:now(), updated_at:now()});
+  await setDoc(doc(db,'todos',todoId), data);
+  return true;
+}
+async function addCarryover(note, planId){
+  const id = genId();
+  await setDoc(doc(db,'carryovers',id), {id, note, created_at: now(), from_plan_id: planId});
+}
+
+// ---------- render ----------
+function render(){
+  renderTabs();
+  const app = $('#app');
+  if(activeTab==='plan') app.innerHTML = renderPlanTab();
+  else if(activeTab==='todo') app.innerHTML = renderTodoTab();
+  else if(activeTab==='exec') app.innerHTML = renderExecTab();
+  else app.innerHTML = renderReviewTab();
+  const sp = document.getElementById('schema-pre'); if(sp) sp.textContent = JSON.stringify(SCHEMA,null,2);
+  bindEvents();
+}
+
+function renderTabs(){
+  const tabs = [['plan','계획'],['todo','할 일'],['exec','실행 기록'],['review','돌아보기']];
+  $('#tabs').innerHTML = tabs.map(([k,l])=>'<button class="tab-btn '+(activeTab===k?'active':'')+'" data-tab="'+k+'">'+l+'</button>').join('')
+    + '<button class="tab-btn secondary" id="export-btn" style="margin-left:auto;background:#374151;">내보내기</button>';
+}
+
+function renderPlanTab(){
+  let html = '<div class="card"><h3>새 계획 만들기</h3>';
+  if(STATE.carryovers.length){ html += '<div class="muted" style="margin-bottom:8px;">이전 돌아보기 메모: ' + STATE.carryovers.slice(-3).map(c=>esc(c.note)).join(' · ') + '</div>'; }
+  html += '<form id="plan-form">'
+    + '<label>제목</label><input name="title" required>'
+    + '<div class="row"><div><label>시작일</label><input type="date" name="period_start" required></div>'
+    + '<div><label>종료일</label><input type="date" name="period_end" required></div></div>'
+    + '<div class="row"><div><label>우선순위</label><select name="priority"><option value="high">높음</option><option value="mid" selected>보통</option><option value="low">낮음</option></select></div>'
+    + '<div><label>예상 시간(시간)</label><input type="number" name="estimated_hours" min="0" step="0.5" required></div></div>'
+    + '<label>성공 기준</label><textarea name="success_criteria" required placeholder="무엇이 되면 성공인지"></textarea>'
+    + '<button class="btn" type="submit">계획 저장</button></form></div>';
+  if(!STATE.plans.length){ html += '<div class="card muted">아직 등록한 계획이 없습니다.</div>'; }
+  STATE.plans.slice().reverse().forEach(p=>{
+    const todoCount = STATE.todos.filter(t=>t.plan_id===p.id).length;
+    html += '<div class="card"><h3>'+esc(p.current.title)+' <span class="muted">('+todoCount+'개 할 일)</span></h3>'
+      + '<div class="muted">기간 '+esc(p.current.period_start)+' ~ '+esc(p.current.period_end)+' · 우선순위 '+prLabel(p.current.priority)+' · 예상 '+esc(p.current.estimated_hours)+'시간</div>'
+      + '<p style="font-size:13px;">'+esc(p.current.success_criteria)+'</p>'
+      + '<details><summary>최초 저장된 계획(수정 불가)</summary><div class="drill">'
+      + '제목: '+esc(p.original.title)+'<br>기간: '+esc(p.original.period_start)+' ~ '+esc(p.original.period_end)
+      + '<br>우선순위: '+prLabel(p.original.priority)+'<br>예상 시간: '+esc(p.original.estimated_hours)+'시간'
+      + '<br>성공 기준: '+esc(p.original.success_criteria)+'<br>저장 시각: '+fmtDT(p.original.created_at)+'</div></details>';
+    if(p.edit_history.length){
+      html += '<details><summary>수정 이력 ('+p.edit_history.length+'건)</summary>'
+        + p.edit_history.map(h=>'<div class="drill">'+fmtDT(h.edited_at)+' 이전 값 — '+esc(h.title)+' / '+esc(h.period_start)+'~'+esc(h.period_end)+' / '+prLabel(h.priority)+' / '+esc(h.estimated_hours)+'시간<br>'+esc(h.success_criteria)+'</div>').join('')
+        + '</details>';
+    }
+    html += '<button class="btn small secondary" data-edit-plan="'+p.id+'">현재 계획 수정</button>'
+      + '<form class="edit-plan-form" data-plan-id="'+p.id+'" style="display:none;margin-top:10px;">'
+      + '<label>제목</label><input name="title" value="'+esc(p.current.title)+'" required>'
+      + '<div class="row"><div><label>시작일</label><input type="date" name="period_start" value="'+esc(p.current.period_start)+'" required></div>'
+      + '<div><label>종료일</label><input type="date" name="period_end" value="'+esc(p.current.period_end)+'" required></div></div>'
+      + '<div class="row"><div><label>우선순위</label><select name="priority">'
+      + '<option value="high"'+(p.current.priority==='high'?' selected':'')+'>높음</option>'
+      + '<option value="mid"'+(p.current.priority==='mid'?' selected':'')+'>보통</option>'
+      + '<option value="low"'+(p.current.priority==='low'?' selected':'')+'>낮음</option></select></div>'
+      + '<div><label>예상 시간(시간)</label><input type="number" name="estimated_hours" min="0" step="0.5" value="'+esc(p.current.estimated_hours)+'" required></div></div>'
+      + '<label>성공 기준</label><textarea name="success_criteria" required>'+esc(p.current.success_criteria)+'</textarea>'
+      + '<button class="btn small" type="submit">수정 저장</button></form></div>';
+  });
+  return html;
+}
+
+function renderTodoTab(){
+  let items = STATE.todos.slice();
+  if(todoFilters.plan!=='all') items = items.filter(t=>t.plan_id===todoFilters.plan);
+  if(todoFilters.status!=='all') items = items.filter(t=>t.status===todoFilters.status);
+  if(todoFilters.q) items = items.filter(t=>(t.title+' '+(t.tags||[]).join(' ')).toLowerCase().includes(todoFilters.q.toLowerCase()));
+  items.sort((a,b)=>{
+    if(todoFilters.sort==='deadline') return (a.deadline||'9999-12-31').localeCompare(b.deadline||'9999-12-31');
+    if(todoFilters.sort==='priority'){ const w={high:0,mid:1,low:2}; return w[a.priority]-w[b.priority]; }
+    return b.created_at-a.created_at;
+  });
+  const planOptions = STATE.plans.map(p=>'<option value="'+p.id+'">'+esc(p.current.title)+'</option>').join('');
+  let html = '<div class="card"><h3>새 할 일</h3>';
+  if(!STATE.plans.length){ html += '<div class="muted">먼저 계획 탭에서 계획을 하나 만들어주세요.</div>'; }
+  else {
+    html += '<form id="todo-form">'
+      + '<label>연결할 계획</label><select name="plan_id" required><option value="">선택</option>'+planOptions+'</select>'
+      + '<label>제목</label><input name="title" required>'
+      + '<div class="row"><div><label>마감일</label><input type="date" name="deadline"></div>'
+      + '<div><label>우선순위</label><select name="priority"><option value="high">높음</option><option value="mid" selected>보통</option><option value="low">낮음</option></select></div>'
+      + '<div><label>예상 시간(분)</label><input type="number" name="estimated_minutes" min="0"></div></div>'
+      + '<label>태그(쉼표로 구분)</label><input name="tags" placeholder="예: 알고리즘, 자격증">'
+      + '<button class="btn" type="submit">할 일 추가</button></form>';
+  }
+  html += '</div>';
+  html += '<div class="card"><div class="row">'
+    + '<div><label>계획 필터</label><select id="f-plan"><option value="all">전체</option>'
+    + STATE.plans.map(p=>'<option value="'+p.id+'"'+(todoFilters.plan===p.id?' selected':'')+'>'+esc(p.current.title)+'</option>').join('') + '</select></div>'
+    + '<div><label>상태</label><select id="f-status"><option value="all">전체</option><option value="todo">진행중</option><option value="done">완료</option></select></div>'
+    + '<div><label>정렬</label><select id="f-sort"><option value="created">최신순</option><option value="deadline">마감일순</option><option value="priority">우선순위순</option></select></div>'
+    + '<div><label>검색(제목/태그)</label><input id="f-q" value="'+esc(todoFilters.q)+'"></div>'
+    + '</div></div>';
+  if(!items.length){ html += '<div class="card muted">표시할 할 일이 없습니다.</div>'; }
+  items.forEach(t=>{
+    const plan = STATE.plans.find(p=>p.id===t.plan_id);
+    html += '<div class="card"><div><strong>'+esc(t.title)+'</strong> <span class="badge '+t.status+'">'+(t.status==='done'?'완료':'진행중')+'</span><br>'
+      + '<span class="muted">계획: '+(plan?esc(plan.current.title):'(삭제됨)')+' · 마감 '+(t.deadline?esc(t.deadline):'-')+' · 우선순위 '+prLabel(t.priority)+' · 예상 '+fmtMin(t.estimated_minutes)+'</span><br>'
+      + (t.tags||[]).map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('') + '</div>'
+      + '<div style="margin-top:8px;">'
+      + '<button class="btn small" data-toggle-todo="'+t.id+'">'+(t.status==='done'?'되돌리기':'완료로 표시')+'</button>'
+      + '<button class="btn small secondary" data-edit-todo="'+t.id+'">수정</button>'
+      + '<button class="btn small danger" data-del-todo="'+t.id+'">삭제</button></div>'
+      + '<form class="edit-todo-form" data-todo-id="'+t.id+'" style="display:none;margin-top:10px;">'
+      + '<label>제목</label><input name="title" value="'+esc(t.title)+'" required>'
+      + '<div class="row"><div><label>마감일</label><input type="date" name="deadline" value="'+esc(t.deadline||'')+'"></div>'
+      + '<div><label>우선순위</label><select name="priority">'
+      + '<option value="high"'+(t.priority==='high'?' selected':'')+'>높음</option>'
+      + '<option value="mid"'+(t.priority==='mid'?' selected':'')+'>보통</option>'
+      + '<option value="low"'+(t.priority==='low'?' selected':'')+'>낮음</option></select></div>'
+      + '<div><label>예상 시간(분)</label><input type="number" name="estimated_minutes" min="0" value="'+esc(t.estimated_minutes)+'"></div></div>'
+      + '<label>태그(쉼표로 구분)</label><input name="tags" value="'+esc((t.tags||[]).join(', '))+'">'
+      + '<button class="btn small" type="submit">수정 저장</button></form></div>';
+  });
+  return html;
+}
+
+function renderExecTab(){
+  let html = '<div class="card"><h3>작업 기록 추가 / 완료 처리</h3>';
+  if(!STATE.todos.length){ html += '<div class="muted">먼저 할 일 탭에서 할 일을 추가하세요.</div>'; }
+  else {
+    html += '<form id="exec-form">'
+      + '<label>대상 할 일</label><select name="todo_id" required><option value="">선택</option>'
+      + STATE.todos.map(t=>'<option value="'+t.id+'">'+esc(t.title)+(t.status==='done'?' (완료됨)':'')+'</option>').join('')
+      + '</select>'
+      + '<div class="row"><div><label>시작 시각</label><input type="datetime-local" name="start_at" required></div>'
+      + '<div><label>종료 시각</label><input type="datetime-local" name="end_at" required></div></div>'
+      + '<label>막혔던 이유(선택)</label><input name="blocked_reason" placeholder="막힌 게 없으면 비워두세요">'
+      + '<div><button class="btn secondary" type="submit" data-mode="log">작업 기록만 추가</button>'
+      + '<button class="btn" type="submit" data-mode="complete">완료로 처리</button></div></form>';
+  }
+  html += '</div>';
+  STATE.todos.forEach(t=>{
+    const execs = STATE.executions.filter(e=>e.todo_id===t.id).sort((a,b)=>b.start_at-a.start_at);
+    if(!execs.length) return;
+    html += '<div class="card"><h3>'+esc(t.title)+' <span class="muted">실행 기록 '+execs.length+'건</span></h3>';
+    execs.forEach(e=>{ html += '<div class="list-item">'+fmtDT(e.start_at)+' ~ '+fmtDT(e.end_at)+' · 실제 '+fmtMin(e.actual_minutes)+(e.blocked_reason?' · 막힘: '+esc(e.blocked_reason):'')+'</div>'; });
+    html += '</div>';
+  });
+  return html;
+}
+
+function renderReviewTab(){
+  let html = '<div class="card"><h3>계획 선택</h3>';
+  if(!STATE.plans.length){ html += '<div class="muted">계획을 먼저 만들어주세요.</div></div>'; return html; }
+  html += '<select id="review-plan-select"><option value="">선택</option>'
+    + STATE.plans.map(p=>'<option value="'+p.id+'"'+(selectedPlanId===p.id?' selected':'')+'>'+esc(p.current.title)+'</option>').join('')
+    + '</select></div>';
+  if(!selectedPlanId) return html;
+  const plan = STATE.plans.find(p=>p.id===selectedPlanId);
+  if(!plan){ selectedPlanId=null; return html; }
+  const todos = STATE.todos.filter(t=>t.plan_id===plan.id);
+  const today = todayKST();
+  const completed = todos.filter(t=>t.status==='done');
+  const delayed = todos.filter(t=>t.status!=='done' && t.deadline && t.deadline<today);
+  const blockedIds = new Set(STATE.executions.filter(e=>e.blocked_reason && e.blocked_reason.trim()).map(e=>e.todo_id));
+  const blocked = todos.filter(t=>blockedIds.has(t.id));
+  const estTotal = todos.reduce((s,t)=>s+(Number(t.estimated_minutes)||0),0);
+  const todoIdSet = new Set(todos.map(t=>t.id));
+  const execsInScope = STATE.executions.filter(e=>todoIdSet.has(e.todo_id));
+  const actTotal = execsInScope.reduce((s,e)=>s+(Number(e.actual_minutes)||0),0);
+  const diff = (estTotal || actTotal) ? (actTotal - estTotal) : 0;
+
+  html += '<div class="card"><h3>'+esc(plan.current.title)+' <span class="muted">'+esc(plan.current.period_start)+'~'+esc(plan.current.period_end)+'</span></h3>'
+    + '<div class="stat-grid">'
+    + '<div class="stat" data-drill="planned"><div class="num">'+todos.length+'</div><div class="label">계획한 할 일</div></div>'
+    + '<div class="stat" data-drill="completed"><div class="num">'+completed.length+'</div><div class="label">완료</div></div>'
+    + '<div class="stat" data-drill="delayed"><div class="num">'+delayed.length+'</div><div class="label">지연</div></div>'
+    + '<div class="stat" data-drill="blocked"><div class="num">'+blocked.length+'</div><div class="label">막힘</div></div>'
+    + '<div class="stat" data-drill="time"><div class="num">'+(diff>0?'+':'')+diff+'분</div><div class="label">실제-예상(예상 '+estTotal+'·실제 '+actTotal+')</div></div>'
+    + '</div>' + renderDrill(todos,completed,delayed,blocked,execsInScope) + '</div>';
+
+  html += '<div class="card"><h3>다음 계획으로 넘길 한 줄</h3>'
+    + '<form id="carry-form"><input name="note" placeholder="이번 돌아보기에서 고칠 점 한 가지" required>'
+    + '<button class="btn small" type="submit">저장</button></form>'
+    + STATE.carryovers.filter(c=>c.from_plan_id===plan.id).slice().reverse().map(c=>'<div class="muted" style="margin-top:6px;">'+fmtDT(c.created_at)+' — '+esc(c.note)+'</div>').join('')
+    + '</div>';
+  return html;
+}
+
+function renderDrill(todos,completed,delayed,blocked,execs){
+  if(!openDrill) return '';
+  let rows=[];
+  if(openDrill==='planned') rows = todos.map(t=>esc(t.title)+' ('+(t.status==='done'?'완료':'진행중')+')');
+  if(openDrill==='completed') rows = completed.map(t=>esc(t.title)+' — '+fmtDT(t.completed_at));
+  if(openDrill==='delayed') rows = delayed.map(t=>esc(t.title)+' — 마감 '+esc(t.deadline));
+  if(openDrill==='blocked') rows = blocked.map(t=>{ const e = STATE.executions.find(x=>x.todo_id===t.id && x.blocked_reason); return esc(t.title)+' — '+esc(e?e.blocked_reason:''); });
+  if(openDrill==='time') rows = execs.map(e=>{ const t=STATE.todos.find(x=>x.id===e.todo_id); return (t?esc(t.title):'')+' — '+fmtDT(e.start_at)+'~'+fmtDT(e.end_at)+' ('+e.actual_minutes+'분)'; });
+  return '<div class="drill"><strong>상세 기록</strong><br>'+(rows.length?rows.join('<br>'):'해당 기록 없음')+'</div>';
+}
+
+function doExport(){
+  const blob = new Blob([JSON.stringify(STATE,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'plan-do-see-data.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+function guard(fn){ return async function(){ if(busy) return; busy=true; try{ await fn.apply(null, arguments); }catch(e){ alert('저장 중 문제: '+(e&&e.message?e.message:e)); busy=false; render(); } }; }
+
+function bindEvents(){
+  $$('#tabs .tab-btn[data-tab]').forEach(b=>b.onclick=()=>{ activeTab=b.dataset.tab; render(); });
+  const exportBtn = document.getElementById('export-btn'); if(exportBtn) exportBtn.onclick = doExport;
+
+  const planForm = $('#plan-form');
+  if(planForm) planForm.onsubmit = guard(async (e)=>{ e.preventDefault(); const fd=new FormData(planForm);
+    await addPlan({title:fd.get('title'),period_start:fd.get('period_start'),period_end:fd.get('period_end'),priority:fd.get('priority'),success_criteria:fd.get('success_criteria'),estimated_hours:Number(fd.get('estimated_hours'))}); });
+
+  $$('[data-edit-plan]').forEach(b=>b.onclick=()=>{ const f=$('.edit-plan-form[data-plan-id="'+b.dataset.editPlan+'"]'); f.style.display = f.style.display==='none'?'block':'none'; });
+  $$('.edit-plan-form').forEach(f=>f.onsubmit=guard(async (e)=>{ e.preventDefault(); const fd=new FormData(f);
+    await editPlan(f.dataset.planId,{title:fd.get('title'),period_start:fd.get('period_start'),period_end:fd.get('period_end'),priority:fd.get('priority'),success_criteria:fd.get('success_criteria'),estimated_hours:Number(fd.get('estimated_hours'))}); }));
+
+  const todoForm = $('#todo-form');
+  if(todoForm) todoForm.onsubmit=guard(async (e)=>{ e.preventDefault(); const fd=new FormData(todoForm);
+    const tags=(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean);
+    await addTodo({plan_id:fd.get('plan_id'),title:fd.get('title'),deadline:fd.get('deadline'),priority:fd.get('priority'),tags,estimated_minutes:Number(fd.get('estimated_minutes')||0)}); });
+
+  const fp=$('#f-plan'), fs=$('#f-status'), fo=$('#f-sort'), fq=$('#f-q');
+  if(fp) fp.onchange=()=>{ todoFilters.plan=fp.value; render(); };
+  if(fs) fs.onchange=()=>{ todoFilters.status=fs.value; render(); };
+  if(fo) fo.onchange=()=>{ todoFilters.sort=fo.value; render(); };
+  if(fq) fq.oninput=()=>{ todoFilters.q=fq.value; render(); };
+
+  $$('[data-toggle-todo]').forEach(b=>b.onclick=guard(async ()=>{ await toggleTodo(b.dataset.toggleTodo); }));
+  $$('[data-del-todo]').forEach(b=>b.onclick=guard(async ()=>{ if(!confirm('정말 삭제할까요? 관련 실행 기록도 함께 삭제됩니다.')){ busy=false; return; } await deleteTodo(b.dataset.delTodo); }));
+  $$('[data-edit-todo]').forEach(b=>b.onclick=()=>{ const f=$('.edit-todo-form[data-todo-id="'+b.dataset.editTodo+'"]'); f.style.display=f.style.display==='none'?'block':'none'; });
+  $$('.edit-todo-form').forEach(f=>f.onsubmit=guard(async (e)=>{ e.preventDefault(); const fd=new FormData(f);
+    const tags=(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean);
+    await editTodo(f.dataset.todoId,{title:fd.get('title'),deadline:fd.get('deadline'),priority:fd.get('priority'),tags,estimated_minutes:Number(fd.get('estimated_minutes')||0)}); }));
+
+  const execForm = $('#exec-form');
+  if(execForm) execForm.onsubmit=guard(async (e)=>{
+    e.preventDefault();
+    const mode = e.submitter ? e.submitter.dataset.mode : 'log';
+    const fd = new FormData(execForm);
+    const todoId = fd.get('todo_id');
+    const start = new Date(fd.get('start_at')).getTime();
+    const end = new Date(fd.get('end_at')).getTime();
+    const blocked = fd.get('blocked_reason');
+    if(!todoId || isNaN(start) || isNaN(end)){ busy=false; return; }
+    if(mode==='complete'){
+      const ok = await completeTodo(todoId, start, end, blocked);
+      if(!ok){ alert('이미 완료된 할 일입니다.'); }
+    } else {
+      await addExecution(todoId, start, end, blocked);
+    }
+    await refreshAll();
+  });
+
+  const reviewSel = $('#review-plan-select');
+  if(reviewSel) reviewSel.onchange = ()=>{ selectedPlanId = reviewSel.value || null; openDrill=null; render(); };
+  $$('.stat[data-drill]').forEach(s=>s.onclick=()=>{ openDrill = (openDrill===s.dataset.drill)? null : s.dataset.drill; render(); });
+  const carryForm = $('#carry-form');
+  if(carryForm) carryForm.onsubmit=guard(async (e)=>{ e.preventDefault(); const fd=new FormData(carryForm); await addCarryover(fd.get('note'), selectedPlanId); });
+}
+
+refreshAll();
+</script>
+</body>
+</html>

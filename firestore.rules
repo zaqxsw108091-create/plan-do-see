@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 과제 제출용(index.html): 로그인 없이 누구나 읽고 쓸 수 있는 공개 컬렉션.
+    // 과제 요구사항상 로그인 기능이 없으므로 의도적으로 공개되어 있습니다.
+    match /plans/{id} {
+      allow read, write: if true;
+    }
+    match /todos/{id} {
+      allow read, write: if true;
+    }
+    match /executions/{id} {
+      allow read, write: if true;
+    }
+    match /carryovers/{id} {
+      allow read, write: if true;
+    }
+
+    // 개인용(private.html): 로그인한 사용자 본인의 UID 경로에만 접근 가능.
+    // 다른 사람은 로그인해도 남의 데이터를 읽거나 쓸 수 없습니다.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
