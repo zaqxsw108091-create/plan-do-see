@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>플랜두씨 다이어리 — 예전 데이터 옮기기</title>
+<style>
+  body{font-family:'Malgun Gothic',-apple-system,sans-serif;background:#0f172a;color:#e5e7eb;max-width:640px;margin:60px auto;padding:0 16px;}
+  .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:20px;margin-bottom:14px;}
+  h1{font-size:19px;}
+  button{background:#6366f1;color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px;margin-top:10px;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  pre{white-space:pre-wrap;font-size:12px;color:#9ca3af;background:#0b1220;padding:10px;border-radius:8px;}
+  .ok{color:#22c55e;}
+  .err{color:#ef4444;}
+  a{color:#93c5fd;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>예전(클로드 아티팩트) 데이터를 이 Firebase 사이트로 한 번만 옮기기</h1>
+    <p>버튼을 누르면 아래 데이터를 <b>plan-do-see-bd6d1</b> Firestore(공개 컬렉션)에 그대로 넣습니다. 이미 옮긴 뒤 또 누르면 같은 id라 덮어쓸 뿐, 중복 생성되지 않습니다.</p>
+    <ul>
+      <li>계획 1개: "오늘은 자격증 공부를 해보자"</li>
+      <li>할 일 2개</li>
+      <li>실행 기록 1개</li>
+    </ul>
+    <button id="go">지금 옮기기</button>
+    <div id="status" style="margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <p>다 옮겼으면 <a href="index.html">index.html로 이동</a>해서 할 일 3개 이상, 실행 기록 2건 이상만 더 추가하면 돼요 (총 5개 할 일 / 3건 완료 조건 채우기).</p>
+    <p>이 파일(migrate.html)은 다 쓰고 나면 저장소에서 지워도 되고 남겨둬도 상관없습니다.</p>
+  </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfx02D2-iJhdmTPnQJ8K0HaLMrzIO9E0o",
+  authDomain: "plan-do-see-bd6d1.firebaseapp.com",
+  projectId: "plan-do-see-bd6d1",
+  storageBucket: "plan-do-see-bd6d1.firebasestorage.app",
+  messagingSenderId: "891274974283",
+  appId: "1:891274974283:web:53fe4b19fe27944c8aa9ce",
+  measurementId: "G-71CM570CRR"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const OLD_DATA = {
+  "plans": [
+    {
+      "id": "cee7f386-e833-4b3e-b42c-feb696cc4933",
+      "created_at": 1790038808634,
+      "original": {
+        "title": "오늘은 자격증 공부를 해보자",
+        "period_start": "2026-09-22",
+        "period_end": "2026-09-22",
+        "priority": "mid",
+        "success_criteria": "1시간 이상 했고 내가 생각했을 때 그 1시간에 내가 그만큼에 힘을 넣었는지 보는것",
+        "estimated_hours": 1,
+        "created_at": 1790038808634
+      },
+      "current": {
+        "title": "오늘은 자격증 공부를 해보자",
+        "period_start": "2026-09-22",
+        "period_end": "2026-09-22",
+        "priority": "mid",
+        "success_criteria": "1시간 이상 했고 내가 생각했을 때 그 1시간에 내가 그만큼에 힘을 넣었는지 보는것",
+        "estimated_hours": 1,
+        "updated_at": 1790038808634
+      },
+      "edit_history": [],
+      "carry_forward_note": ""
+    }
+  ],
+  "todos": [
+    {
+      "id": "5ee34cf7-9289-4cd5-adf2-1c9d5d56e198",
+      "plan_id": "cee7f386-e833-4b3e-b42c-feb696cc4933",
+      "title": "자격증 공부 학원 버전",
+      "created_at": 1790046818631,
+      "updated_at": 1790149558790,
+      "deadline": "2026-09-22",
+      "priority": "high",
+      "tags": ["자격증"],
+      "estimated_minutes": 20,
+      "status": "done",
+      "completed_at": 1790149558790
+    },
+    {
+      "id": "75fa3b81-6070-4b71-bea7-4a54c87f5f7b",
+      "plan_id": "cee7f386-e833-4b3e-b42c-feb696cc4933",
+      "title": "노트북없음 수리 오늘은 자격증공부",
+      "created_at": 1790149544700,
+      "updated_at": 1790149544700,
+      "deadline": "2026-09-23",
+      "priority": "high",
+      "tags": ["자격증"],
+      "estimated_minutes": 40,
+      "status": "todo",
+      "completed_at": null
+    }
+  ],
+  "executions": [
+    {
+      "id": "3268acc5-3407-461b-a07a-d47da925f5ef",
+      "todo_id": "5ee34cf7-9289-4cd5-adf2-1c9d5d56e198",
+      "start_at": 1790060400000,
+      "end_at": 1790062560000,
+      "actual_minutes": 36,
+      "blocked_reason": "노트북의 수리 때문에 1분 2분 그곳에 써서 조금 더 했다",
+      "created_at": 1790062644751
+    }
+  ],
+  "carryovers": []
+};
+
+document.getElementById('go').onclick = async () => {
+  const btn = document.getElementById('go');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.innerHTML = '옮기는 중...';
+  try {
+    for (const p of OLD_DATA.plans) await setDoc(doc(db, 'plans', p.id), p);
+    for (const t of OLD_DATA.todos) await setDoc(doc(db, 'todos', t.id), t);
+    for (const e of OLD_DATA.executions) await setDoc(doc(db, 'executions', e.id), e);
+    for (const c of OLD_DATA.carryovers) await setDoc(doc(db, 'carryovers', c.id), c);
+    status.innerHTML = '<span class="ok">완료! 계획 ' + OLD_DATA.plans.length + '개, 할 일 ' + OLD_DATA.todos.length + '개, 실행 기록 ' + OLD_DATA.executions.length + '건을 옮겼습니다. 이제 index.html로 가서 확인하세요.</span>';
+  } catch (e) {
+    status.innerHTML = '<span class="err">오류: ' + (e && e.message ? e.message : e) + '</span>';
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
