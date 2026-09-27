@@ -1,0 +1,105 @@
+{
+  "name": "플랜두씨 다이어리 데이터 계약",
+  "version": "v2 (2026-09-27)",
+  "database": "Firebase Cloud Firestore (프로젝트 plan-do-see-bd6d1, 서울 asia-northeast3). 컬렉션 하나 = 표 하나, 문서 하나 = 항목 하나. 문서 id = 항목 id(crypto.randomUUID).",
+  "tables": {
+    "plans": {
+      "설명": "계획. 처음 저장한 값(original)은 절대 바꾸지 않고, 수정은 current에만 한다.",
+      "fields": {
+        "id": "string, 문서 id와 같음, 수정해도 바뀌지 않음",
+        "created_at": "number(epoch ms)",
+        "original": "{title, period_start, period_end, priority, success_criteria, estimated_hours, created_at} — 생성 시 1회 저장, 이후 불변",
+        "current": "{title, period_start, period_end, priority, success_criteria, estimated_hours, updated_at} — 지금 값",
+        "edit_history": "array — 수정할 때마다 수정 직전 current + edited_at 을 뒤에 추가",
+        "carried_over": "null | {carryover_id, note, from_plan_id} — 지난 돌아보기에서 넘어온 고칠 점"
+      }
+    },
+    "todos": {
+      "설명": "계획에 딸린 할 일",
+      "fields": {
+        "id": "string",
+        "plan_id": "string → plans.id",
+        "title": "string",
+        "deadline": "null | 'YYYY-MM-DD' (한국 날짜)",
+        "priority": "'high' | 'mid' | 'low'",
+        "tags": "string[]",
+        "estimated_minutes": "number(분)",
+        "status": "'todo' | 'done'",
+        "completed_at": "null | number(epoch ms)",
+        "created_at": "number(epoch ms)",
+        "updated_at": "number(epoch ms)"
+      }
+    },
+    "executions": {
+      "설명": "실제로 한 일(실행 기록). 계획·할 일의 원래 값과 별도 표에 저장해서 덮어쓰지 않는다.",
+      "fields": {
+        "id": "string",
+        "todo_id": "string → todos.id",
+        "start_at": "number(epoch ms)",
+        "end_at": "number(epoch ms)",
+        "actual_minutes": "number(분) = round((end_at - start_at) / 60000)",
+        "blocked_reason": "null | string — '막힌 점이 있었음'을 체크한 경우에만 값",
+        "created_at": "number(epoch ms)",
+        "updated_at": "number(epoch ms), 수정한 경우만"
+      },
+      "검증": "종료 > 시작, 한 기록 24시간 이내, 막힘 체크 시 이유 필수. 실패하면 저장하지 않고 폼 아래에 이유 표시."
+    },
+    "carryovers": {
+      "설명": "돌아보기에서 정한 '다음 계획으로 넘길 고칠 점 한 줄'",
+      "fields": {
+        "id": "string",
+        "note": "string",
+        "from_plan_id": "string → plans.id (어느 계획을 돌아보고 나왔는지)",
+        "applied_to_plan_id": "null | string → plans.id (어느 새 계획으로 넘어갔는지)",
+        "applied_at": "null | number(epoch ms)",
+        "created_at": "number(epoch ms)"
+      }
+    }
+  },
+  "relations": [
+    "plans 1 : N todos (todos.plan_id)",
+    "todos 1 : N executions (executions.todo_id) — 할 일을 지우면 그 실행 기록도 함께 지움",
+    "plans 1 : N carryovers (carryovers.from_plan_id) — 돌아보기에서 나옴",
+    "carryovers 1 : 1 plans (carryovers.applied_to_plan_id ↔ plans.carried_over.carryover_id) — 새 계획을 만들 때 한 번의 일괄 쓰기(batch)로 양쪽을 같이 저장"
+  ],
+  "date_rules": {
+    "저장": "시각은 모두 epoch ms(UTC 기준 숫자). 날짜만 있는 값(기간, 마감일)은 'YYYY-MM-DD' 문자열.",
+    "입력": "실행 기록 시각 입력칸은 항상 한국 시간(Asia/Seoul, UTC+9)으로 해석한다. 사용하는 컴퓨터의 시간대와 무관.",
+    "표시": "모든 시각은 한국 시간으로 표시한다.",
+    "오늘": "지연 판정의 '오늘'은 한국 시간 기준 날짜.",
+    "단위": "예상 시간·실제 시간은 모두 '분'으로 저장하고 계산한다(계획의 예상 시간만 '시간' 단위, 집계에는 쓰지 않음)."
+  },
+  "duplicate_prevention": {
+    "대상": "실행 기록 탭의 '완료로 처리', 할 일 탭의 '완료로 표시 / 되돌리기'",
+    "방법": [
+      "화면: 저장 중에는 다른 입력을 막는다(busy)",
+      "서버 트랜잭션: 할 일을 서버에서 다시 읽어 이미 완료면 실행 기록을 만들지 않는다(다른 탭·다른 컴퓨터에서 눌러도 1건)",
+      "요청 키: 실행 기록 id를 트랜잭션 밖에서 한 번만 만들어, 재시도로 다시 실행돼도 같은 문서에 쓴다",
+      "완료/되돌리기 버튼은 토글이 아니라 목표 상태를 보낸다(두 번 눌러도 뒤집히지 않음)"
+    ]
+  },
+  "sort_rules": {
+    "최신순": "만든 시각이 늦은 것부터 → 같으면 제목 가나다순 → 같으면 id",
+    "마감일순": "마감일 빠른 것부터(마감일 없으면 맨 뒤) → 같으면 우선순위 높은 것 → 같으면 먼저 만든 것 → 같으면 id",
+    "우선순위순": "높음 → 보통 → 낮음 → 같으면 마감일 빠른 것 → 같으면 먼저 만든 것 → 같으면 id",
+    "검색": "제목 또는 태그에 입력한 글자가 포함된 할 일(대소문자 무시)",
+    "처리 위치": "서버에서 전체를 불러온 뒤 화면(브라우저)에서 거르고 정렬한다"
+  },
+  "aggregation_rules": {
+    "범위": "돌아보기는 선택한 계획 하나에 딸린 할 일을 대상으로 집계한다",
+    "계획한 할 일": "그 계획에 딸린, 지우지 않은 할 일 수",
+    "완료": "그중 지금 status가 done인 할 일 수",
+    "지연": "완료되지 않았고, 마감일이 한국 시간 기준 오늘보다 앞선 할 일 수(완료된 할 일은 지연으로 세지 않음)",
+    "막힘": "막힌 이유가 하나라도 적힌 실행 기록이 있는 할 일 수",
+    "예상 시간": "대상 할 일의 estimated_minutes 합계",
+    "실제 시간": "대상 할 일에 연결된 실행 기록의 actual_minutes 합계",
+    "차이": "실제 - 예상, 둘 다 없으면 0",
+    "근거 보기": "각 숫자를 누르면 그 숫자를 만든 할 일/실행 기록 목록이 펼쳐진다"
+  },
+  "export": "화면 오른쪽 위 '내보내기' → plans·todos·executions·carryovers 전체를 JSON 파일 하나(plan-do-see-data.json)로 저장",
+  "security": {
+    "공개 안내": "지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요. (잠금은 7번 과제)",
+    "스크립트 삽입": "사용자가 입력한 모든 글자는 화면에 넣기 전에 HTML 이스케이프한다. <script> 같은 글자를 저장해도 실행되지 않고 글자 그대로 보인다.",
+    "비밀값": "코드·저장소에 비밀키·비밀번호·토큰이 없다. firebaseConfig의 apiKey는 Firebase가 공개를 전제로 만든 '프로젝트 식별값'이며 비밀키가 아니다. 데이터 접근은 Firestore 보안 규칙(firestore.rules)이 정한다."
+  }
+}
