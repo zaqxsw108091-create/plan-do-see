@@ -111,7 +111,10 @@
         <h1>플랜두씨 다이어리 <span class="badge-personal">개인용</span></h1>
         <div class="sub" id="whoami"></div>
       </div>
-      <button class="btn btn-ghost btn-small" id="btn-logout">로그아웃</button>
+      <div style="text-align:right;">
+        <button class="btn btn-ghost btn-small" id="btn-logout">로그아웃</button>
+        <button class="btn btn-ghost btn-small" id="btn-delete-account" style="color:#b3423a;border-color:#f0c9c3;">계정 삭제</button>
+      </div>
     </div>
     <div id="import-box"></div>
     <div class="tabs" id="tabs"></div>
@@ -193,7 +196,7 @@ function cmpTodo(a,b,mode){
   return r || String(a.id).localeCompare(String(b.id));
 }
 
-let STATE = {plans:[], todos:[], executions:[], carryovers:[]};
+let STATE = {plans:[], todos:[], executions:[], carryovers:[], rule_changes:[]};
 let activeTab='plan', selectedPlanId=null, openDrill=null, busy=false;
 // 저장 직후 0.6초는 입력을 받지 않는다: 빠른 더블클릭의 두 번째 클릭이 새로 그려진 '되돌리기' 버튼에 눌리는 것을 막음
 let lockUntil = 0;
@@ -305,18 +308,65 @@ const SCHEMA = {
   }
 };
 
+
+// ---------- 5일 관찰 지표: 1일차에 한 번 정하고 바꾸지 않는다 ----------
+const DAILY_METRIC = {
+  question: '하루 동안 계획한 시간과 실제로 걸린 시간이 얼마나 벗어났는가?',
+  indicator: '실제-예상 시간',
+  unit: '분',
+  rule: '그 날짜(한국시간)가 마감일인 할 일의 예상 시간 합을, 그 날짜에 시작한 실행 기록의 실제 시간 합에서 뺀 값',
+  missing: '예상 시간이 비어 있으면 0분으로 계산한다.',
+  duplicate: '한 할 일에 실행 기록이 여러 건이면 실제 시간을 모두 더한다.',
+  outlier: '하루 실제 시간 합이 1200분(20시간)을 넘으면 표에 "이상치"로 표시하되, 계산에서 빼지 않고 그대로 더한다.',
+  rounding: '분 단위는 가장 가까운 정수 분으로 반올림한다(이미 실행 기록 저장 시 Math.round 적용).',
+  weekStart: '주는 한국 시간(Asia/Seoul) 기준 월요일에 시작한다.'
+};
+function kstDate(ms){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms)); }
+// 일별 지표 계산: DAILY_METRIC.rule 그대로 구현
+function computeDailyDigest(){
+  const actualByDay = {}; // day -> 실제 시간 합(그 날짜에 '시작'한 실행 기록)
+  STATE.executions.forEach(e=>{
+    const d = kstDate(e.start_at);
+    actualByDay[d] = (actualByDay[d]||0) + (Number(e.actual_minutes)||0); // 중복(여러 건)은 합산
+  });
+  const estByDay = {}; // day -> 예상 시간 합(그 날짜가 마감일인 할 일)
+  STATE.todos.forEach(t=>{
+    if(!t.deadline) return;
+    estByDay[t.deadline] = (estByDay[t.deadline]||0) + (Number(t.estimated_minutes)||0); // 값이 비어있으면 0
+  });
+  const days = Array.from(new Set([...Object.keys(actualByDay), ...Object.keys(estByDay)])).sort();
+  return days.map(d=>{
+    const actual = actualByDay[d]||0, est = estByDay[d]||0, diff = actual-est;
+    return {date:d, actual, est, diff, outlier: actual>1200};
+  });
+}
+async function addRuleChange(reason){
+  const id = genId();
+  await setDoc(doc(col('rule_changes'), id), {id, reason:String(reason||'').trim(), changed_at: now()});
+  await refreshAll();
+}
+async function deleteAllMyData(){
+  const names = ['plans','todos','executions','carryovers','rule_changes'];
+  const cols = await Promise.all(names.map(n=>getDocs(col(n))));
+  const batch = writeBatch(db);
+  cols.forEach((snap,i)=> snap.docs.forEach(d=> batch.delete(doc(col(names[i]), d.id))));
+  await batch.commit();
+}
+
 async function refreshAll(){
   if(!uid) return;
-  const [ps, ts, es, cs] = await Promise.all([
+  const [ps, ts, es, cs, rs] = await Promise.all([
     getDocs(col('plans')),
     getDocs(col('todos')),
     getDocs(col('executions')),
     getDocs(col('carryovers')),
+    getDocs(col('rule_changes')),
   ]);
   STATE.plans = ps.docs.map(d=>d.data());
   STATE.todos = ts.docs.map(d=>d.data());
   STATE.executions = es.docs.map(d=>d.data());
   STATE.carryovers = cs.docs.map(d=>d.data());
+  STATE.rule_changes = rs.docs.map(d=>d.data()).sort((a,b)=>a.changed_at-b.changed_at);
   busy = false;
   lockUntil = Date.now() + 600;
   render();
@@ -440,13 +490,14 @@ function render(){
   if(activeTab==='plan') app.innerHTML = renderPlanTab();
   else if(activeTab==='todo') app.innerHTML = renderTodoTab();
   else if(activeTab==='exec') app.innerHTML = renderExecTab();
-  else app.innerHTML = renderReviewTab();
+  else if(activeTab==='review') app.innerHTML = renderReviewTab();
+  else app.innerHTML = renderDailyTab();
   const sp = document.getElementById('schema-pre'); if(sp) sp.textContent = JSON.stringify(SCHEMA,null,2);
   bindEvents();
 }
 
 function renderTabs(){
-  const tabs = [['plan','계획'],['todo','할 일'],['exec','실행 기록'],['review','돌아보기']];
+  const tabs = [['plan','계획'],['todo','할 일'],['exec','실행 기록'],['review','돌아보기'],['daily','5일 관찰']];
   $('#tabs').innerHTML = tabs.map(([k,l])=>'<button class="tab-btn '+(activeTab===k?'active':'')+'" data-tab="'+k+'">'+l+'</button>').join('')
     + '<button class="tab-btn secondary" id="export-btn" style="margin-left:auto;background:#374151;">내보내기</button>';
 }
@@ -621,6 +672,44 @@ function renderExecTab(){
   return html;
 }
 
+function renderDailyTab(){
+  const digest = computeDailyDigest();
+  let html = '<div class="card"><h3>1일차에 정한 관찰 지표 (바꾸지 않음)</h3>'
+    + '<div class="rule">'
+    + '<b>질문</b> · '+esc(DAILY_METRIC.question)+'<br>'
+    + '<b>지표·단위</b> · '+esc(DAILY_METRIC.indicator)+' ('+esc(DAILY_METRIC.unit)+')<br>'
+    + '<b>계산 규칙</b> · '+esc(DAILY_METRIC.rule)+'<br>'
+    + '<b>값이 빠졌을 때</b> · '+esc(DAILY_METRIC.missing)+'<br>'
+    + '<b>값이 중복될 때</b> · '+esc(DAILY_METRIC.duplicate)+'<br>'
+    + '<b>값이 유난히 튈 때</b> · '+esc(DAILY_METRIC.outlier)+'<br>'
+    + '<b>반올림</b> · '+esc(DAILY_METRIC.rounding)+'<br>'
+    + '<b>주 시작 요일</b> · '+esc(DAILY_METRIC.weekStart)
+    + '</div></div>';
+
+  html += '<div class="card"><h3>날짜별 기록 ('+digest.length+'일)</h3>';
+  if(!digest.length){ html += '<div class="muted">아직 기록이 없습니다.</div>'; }
+  else {
+    html += digest.map(d=>'<div class="list-item">'+esc(d.date)+' — 실제 '+d.actual+'분 · 예상 '+d.est+'분 · 차이 '+(d.diff>0?'+':'')+d.diff+'분'
+      + (d.outlier?' <span class="badge todo">이상치</span>':'')+'</div>').join('');
+    const sumActual = digest.reduce((s,d)=>s+d.actual,0), sumEst = digest.reduce((s,d)=>s+d.est,0);
+    html += '<div class="rule">손 검산용 합계 · 실제 '+sumActual+'분 · 예상 '+sumEst+'분 · 차이 '+(sumActual-sumEst>0?'+':'')+(sumActual-sumEst)+'분<br>'
+      + '(위 날짜별 값을 직접 더해서 이 합계와 같은지 확인하세요)</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="card"><h3>계획 규칙 변경 기록</h3>'
+    + '<div class="muted">2일차 기록 뒤, 3일차 기록 앞에 규칙을 하나만 바꾸고 이유를 적으세요. (예: "지연 판정 기준을 마감일 당일까지 허용으로 바꿈")</div>'
+    + '<form id="rule-change-form"><input name="reason" placeholder="무엇을, 왜 바꿨는지" required>'
+    + '<div class="err" role="alert"></div><button class="btn small" type="submit">규칙 변경 기록</button></form>';
+  if(STATE.rule_changes.length){
+    html += STATE.rule_changes.map(r=>'<div class="list-item">'+fmtDT(r.changed_at)+' — '+esc(r.reason)+'</div>').join('');
+  } else {
+    html += '<div class="muted" style="margin-top:8px;">아직 규칙을 바꾼 기록이 없습니다.</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderReviewTab(){
   let html = '<div class="card"><h3>계획 선택</h3>';
   if(!STATE.plans.length){ html += '<div class="muted">계획을 먼저 만들어주세요.</div></div>'; return html; }
@@ -760,6 +849,11 @@ function bindEvents(){
     if(!note){ showFormError(carryForm, '다음 계획에 넘길 고칠 점을 한 줄 적어주세요.'); busy=false; return; }
     await addCarryover(note, selectedPlanId); });
 
+  const ruleChangeForm = $('#rule-change-form');
+  if(ruleChangeForm) ruleChangeForm.onsubmit = guard(async (e)=>{ e.preventDefault();
+    const reason = String(new FormData(ruleChangeForm).get('reason')||'').trim();
+    if(!reason){ showFormError(ruleChangeForm, '무엇을 왜 바꿨는지 적어주세요.'); busy=false; return; }
+    await addRuleChange(reason); });
 }
 
 // ---------- 인증(로그인/가입/로그아웃) ----------
@@ -818,6 +912,23 @@ document.getElementById('btn-signup').onclick = async ()=>{
   catch(e){ errEl.textContent = authErr(e); }
 };
 document.getElementById('btn-logout').onclick = ()=> signOut(auth);
+document.getElementById('btn-delete-account').onclick = async ()=>{
+  if(!confirm('정말 계정을 삭제할까요? 이 계정에 저장된 계획·할 일·실행 기록·돌아보기 자료가 모두 함께 지워지며, 되돌릴 수 없습니다.')) return;
+  const btn = document.getElementById('btn-delete-account'); btn.disabled = true; btn.textContent = '삭제 중...';
+  try{
+    await deleteAllMyData();
+    const { deleteUser } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');
+    await deleteUser(auth.currentUser);
+    alert('계정과 자료가 모두 삭제되었습니다.');
+  }catch(e){
+    if(e && e.code === 'auth/requires-recent-login'){
+      alert('보안상 최근에 로그인한 상태에서만 계정을 삭제할 수 있습니다. 로그아웃 후 다시 로그인하고 바로 시도해주세요.');
+    } else {
+      alert('자료는 지워졌지만 계정 삭제 중 오류가 발생했습니다: ' + (e && e.message ? e.message : e));
+    }
+    btn.disabled = false; btn.textContent = '계정 삭제';
+  }
+};
 
 // ---------- 6번(공개) 데이터 → 내 계정으로 한 번 가져오기 ----------
 // 로그인 직후 내 컬렉션이 비어 있고, 공개 컬렉션(과제6)에 자료가 있으면 가져오기 버튼을 보여준다.
