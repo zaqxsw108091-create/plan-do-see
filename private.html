@@ -28,6 +28,15 @@
   .tab-btn.active{background:var(--ink);border-color:var(--ink);color:#fff;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow);}
   .card h3{margin:0 0 12px;font-size:15.5px;font-weight:800;}
+  details.todo-group,details.exec-group{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;}
+  details.todo-group>summary,details.exec-group>summary{font-size:14.5px;font-weight:800;color:var(--ink);cursor:pointer;list-style:revert;}
+  details.todo-group[open]>summary,details.exec-group[open]>summary{margin-bottom:10px;}
+  details.todo-group .card{margin-top:10px;}
+  details.exec-group .list-item{margin-top:10px;}
+  details.todo-done-group{margin-top:10px;}
+  details.todo-done-group>summary{font-size:12px;font-weight:600;}
+  details.plan-more{margin-top:10px;}
+  details.plan-more>summary{font-size:12.5px;font-weight:700;color:var(--accent);}
   label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px;font-weight:600;}
   input,select,textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 11px;font-size:13.5px;font-family:inherit;transition:border-color .15s ease, box-shadow .15s ease;}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
@@ -519,11 +528,13 @@ function renderPlanTab(){
     + '<label>성공 기준</label><textarea name="success_criteria" required placeholder="무엇이 되면 성공인지"></textarea>'
     + '<button class="btn" type="submit">계획 저장</button></form></div>';
   if(!STATE.plans.length){ html += '<div class="card muted">아직 등록한 계획이 없습니다.</div>'; }
-  STATE.plans.slice().sort((a,b)=>b.created_at-a.created_at).forEach(p=>{
+  STATE.plans.slice().sort((a,b)=>b.created_at-a.created_at).forEach((p,idx)=>{
     const todoCount = STATE.todos.filter(t=>t.plan_id===p.id).length;
+    const openAttr = idx<2 ? ' open' : '';
     html += '<div class="card"><h3>'+esc(p.current.title)+' <span class="muted">('+todoCount+'개 할 일)</span></h3>'
       + '<div class="muted">기간 '+esc(p.current.period_start)+' ~ '+esc(p.current.period_end)+' · 우선순위 '+prLabel(p.current.priority)+' · 예상 '+esc(p.current.estimated_hours)+'시간</div>'
       + (p.carried_over ? '<div class="carry">↪ 지난 돌아보기에서 넘어온 고칠 점: <b>'+esc(p.carried_over.note)+'</b> <span class="muted">(← '+esc(planTitle(p.carried_over.from_plan_id))+')</span></div>' : '')
+      + '<details class="plan-more"'+openAttr+'><summary>자세히 보기 / 수정</summary>'
       + '<p style="font-size:13px;">'+esc(p.current.success_criteria)+'</p>'
       + '<details><summary>최초 저장된 계획(수정 불가)</summary><div class="drill">'
       + '제목: '+esc(p.original.title)+'<br>기간: '+esc(p.original.period_start)+' ~ '+esc(p.original.period_end)
@@ -545,7 +556,8 @@ function renderPlanTab(){
       + '<option value="low"'+(p.current.priority==='low'?' selected':'')+'>낮음</option></select></div>'
       + '<div><label>예상 시간(시간)</label><input type="number" name="estimated_hours" min="0" step="0.5" value="'+esc(p.current.estimated_hours)+'" required></div></div>'
       + '<label>성공 기준</label><textarea name="success_criteria" required>'+esc(p.current.success_criteria)+'</textarea>'
-      + '<button class="btn small" type="submit">수정 저장</button></form></div>';
+      + '<button class="btn small" type="submit">수정 저장</button></form>'
+      + '</details></div>';
   });
   return html;
 }
@@ -558,30 +570,51 @@ function filteredTodos(){
   if(q) items = items.filter(t=>(t.title+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q));
   return items.sort((a,b)=>cmpTodo(a,b,todoFilters.sort));
 }
+function todoCardHTML(t){
+  const plan = STATE.plans.find(p=>p.id===t.plan_id);
+  const target = t.status==='done' ? 'todo' : 'done';
+  return '<div class="card"><div><strong>'+esc(t.title)+'</strong> <span class="badge '+t.status+'">'+(t.status==='done'?'완료':'진행중')+'</span><br>'
+    + '<span class="muted">계획: '+(plan?esc(plan.current.title):'(삭제됨)')+' · 마감 '+(t.deadline?esc(t.deadline):'-')+' · 우선순위 '+prLabel(t.priority)+' · 예상 '+fmtMin(t.estimated_minutes)+'</span><br>'
+    + (t.tags||[]).map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('') + '</div>'
+    + '<div style="margin-top:8px;">'
+    + '<button class="btn small" data-set-status="'+target+'" data-todo="'+t.id+'">'+(t.status==='done'?'되돌리기(진행 중으로)':'완료로 표시')+'</button>'
+    + '<button class="btn small secondary" data-edit-todo="'+t.id+'">수정</button>'
+    + '<button class="btn small danger" data-del-todo="'+t.id+'">삭제</button></div>'
+    + '<form class="edit-todo-form" data-todo-id="'+t.id+'" style="display:none;margin-top:10px;">'
+    + '<label>제목</label><input name="title" value="'+esc(t.title)+'" required>'
+    + '<div class="row"><div><label>마감일</label><input type="date" name="deadline" value="'+esc(t.deadline||'')+'"></div>'
+    + '<div><label>우선순위</label><select name="priority">'
+    + '<option value="high"'+(t.priority==='high'?' selected':'')+'>높음</option>'
+    + '<option value="mid"'+(t.priority==='mid'?' selected':'')+'>보통</option>'
+    + '<option value="low"'+(t.priority==='low'?' selected':'')+'>낮음</option></select></div>'
+    + '<div><label>예상 시간(분)</label><input type="number" name="estimated_minutes" min="0" value="'+esc(t.estimated_minutes)+'"></div></div>'
+    + '<label>태그(쉼표로 구분)</label><input name="tags" value="'+esc((t.tags||[]).join(', '))+'">'
+    + '<button class="btn small" type="submit">수정 저장</button></form></div>';
+}
 function todoListHTML(){
   const items = filteredTodos();
   let html = '<div class="muted" style="margin:0 0 8px;">'+items.length+'개 표시 중 (전체 '+STATE.todos.length+'개)</div>';
   if(!items.length) return html + '<div class="card muted">조건에 맞는 할 일이 없습니다. 검색어나 필터를 바꿔보세요.</div>';
-  items.forEach(t=>{
-    const plan = STATE.plans.find(p=>p.id===t.plan_id);
-    const target = t.status==='done' ? 'todo' : 'done';
-    html += '<div class="card"><div><strong>'+esc(t.title)+'</strong> <span class="badge '+t.status+'">'+(t.status==='done'?'완료':'진행중')+'</span><br>'
-      + '<span class="muted">계획: '+(plan?esc(plan.current.title):'(삭제됨)')+' · 마감 '+(t.deadline?esc(t.deadline):'-')+' · 우선순위 '+prLabel(t.priority)+' · 예상 '+fmtMin(t.estimated_minutes)+'</span><br>'
-      + (t.tags||[]).map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('') + '</div>'
-      + '<div style="margin-top:8px;">'
-      + '<button class="btn small" data-set-status="'+target+'" data-todo="'+t.id+'">'+(t.status==='done'?'되돌리기(진행 중으로)':'완료로 표시')+'</button>'
-      + '<button class="btn small secondary" data-edit-todo="'+t.id+'">수정</button>'
-      + '<button class="btn small danger" data-del-todo="'+t.id+'">삭제</button></div>'
-      + '<form class="edit-todo-form" data-todo-id="'+t.id+'" style="display:none;margin-top:10px;">'
-      + '<label>제목</label><input name="title" value="'+esc(t.title)+'" required>'
-      + '<div class="row"><div><label>마감일</label><input type="date" name="deadline" value="'+esc(t.deadline||'')+'"></div>'
-      + '<div><label>우선순위</label><select name="priority">'
-      + '<option value="high"'+(t.priority==='high'?' selected':'')+'>높음</option>'
-      + '<option value="mid"'+(t.priority==='mid'?' selected':'')+'>보통</option>'
-      + '<option value="low"'+(t.priority==='low'?' selected':'')+'>낮음</option></select></div>'
-      + '<div><label>예상 시간(분)</label><input type="number" name="estimated_minutes" min="0" value="'+esc(t.estimated_minutes)+'"></div></div>'
-      + '<label>태그(쉼표로 구분)</label><input name="tags" value="'+esc((t.tags||[]).join(', '))+'">'
-      + '<button class="btn small" type="submit">수정 저장</button></form></div>';
+  // 계획별로 묶어서 보여주기: 최근 계획이 위, 완료된 항목은 접어서 숨겨 예전 기록이 한눈에 안 밀려 보이게 함
+  const planOrder = STATE.plans.slice().sort((a,b)=>b.created_at-a.created_at).map(p=>p.id);
+  const groups = []; const seen = new Set();
+  planOrder.forEach(pid=>{
+    const ts = items.filter(t=>t.plan_id===pid);
+    if(ts.length){ groups.push({label:planTitle(pid), todos:ts}); seen.add(pid); }
+  });
+  const orphan = items.filter(t=>!seen.has(t.plan_id));
+  if(orphan.length) groups.push({label:'(연결된 계획 없음)', todos:orphan});
+  groups.forEach((g,gi)=>{
+    const active = g.todos.filter(t=>t.status!=='done');
+    const done = g.todos.filter(t=>t.status==='done');
+    html += '<details class="todo-group"'+(gi<2?' open':'')+'><summary>'+esc(g.label)+' <span class="muted">('+g.todos.length+'개 · 진행중 '+active.length+')</span></summary>';
+    active.forEach(t=>{ html += todoCardHTML(t); });
+    if(done.length){
+      html += '<details class="todo-done-group"><summary>완료된 항목 '+done.length+'건 (펼쳐서 보기)</summary>'
+        + done.map(t=>todoCardHTML(t)).join('') + '</details>';
+    }
+    if(!active.length && !done.length){ html += '<div class="muted" style="font-size:12.5px;">항목 없음</div>'; }
+    html += '</details>';
   });
   return html;
 }
@@ -649,11 +682,15 @@ function renderExecTab(){
       + '<button class="btn" type="submit" data-mode="complete">완료로 처리</button></div></form>';
   }
   html += '</div>';
-  STATE.todos.forEach(t=>{
+  // 할 일별로 묶고, 최근 활동한 순서로 정렬 — 예전 기록은 접어 두어 화면이 길게 이어지지 않게 함
+  const groupsExec = STATE.todos.map(t=>{
     const execs = STATE.executions.filter(e=>e.todo_id===t.id).sort((a,b)=>b.start_at-a.start_at);
-    if(!execs.length) return;
+    return {t, execs};
+  }).filter(x=>x.execs.length).sort((a,b)=>b.execs[0].start_at-a.execs[0].start_at);
+  groupsExec.forEach((x,idx)=>{
+    const t = x.t, execs = x.execs;
     const plan = STATE.plans.find(p=>p.id===t.plan_id);
-    html += '<div class="card"><h3>'+esc(t.title)+' <span class="muted">'+(plan?esc(plan.current.title)+' · ':'')+'실행 기록 '+execs.length+'건</span></h3>';
+    html += '<details class="exec-group"'+(idx<2?' open':'')+'><summary>'+esc(t.title)+' <span class="muted">'+(plan?esc(plan.current.title)+' · ':'')+'실행 기록 '+execs.length+'건 · 최근 '+fmtDT(execs[0].start_at)+'</span></summary>';
     execs.forEach(e=>{
       html += '<div class="list-item">'+fmtDT(e.start_at)+' ~ '+fmtDT(e.end_at)+' · 실제 '+fmtMin(e.actual_minutes)
         + (e.blocked_reason?' · 막힘: '+esc(e.blocked_reason):' · 막힘 없음')
@@ -667,7 +704,7 @@ function renderExecTab(){
         + '<button class="btn small" type="submit">수정 저장</button></form>'
         + '</div>';
     });
-    html += '</div>';
+    html += '</details>';
   });
   return html;
 }
