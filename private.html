@@ -6,25 +6,25 @@
 <title>플랜두씨 다이어리 — 과제7(개인용)</title>
 <style>
   :root{
-    --bg:#f6f3ee; --bg-grad:#efe9e0; --panel:#ffffff; --panel-2:#fbf9f5;
-    --ink:#2b2620; --muted:#7c7568; --line:#e7e0d4;
-    --accent:#8a6cf0; --accent-ink:#ffffff; --accent-soft:#efe9fd;
-    --danger:#e0554f; --danger-soft:#fdecea; --ok:#3a9a6b; --ok-soft:#e6f5ee;
-    --warn:#b6791f; --warn-soft:#fdf3e2; --shadow:0 1px 2px rgba(43,38,32,.04),0 8px 24px -12px rgba(43,38,32,.12);
+    --bg:#f3f6fb; --bg-grad:#e8eef8; --panel:#ffffff; --panel-2:#f6f8fc;
+    --ink:#1b2438; --muted:#6a7791; --line:#dde4f0;
+    --accent:#3b82f6; --accent-ink:#ffffff; --accent-soft:#e3eeff;
+    --danger:#e0554f; --danger-soft:#fdecea; --ok:#2f9e6b; --ok-soft:#e3f5ec;
+    --warn:#b6791f; --warn-soft:#fdf3e2; --shadow:0 1px 2px rgba(27,36,56,.05),0 8px 24px -12px rgba(27,36,56,.14);
     --radius:16px;
   }
   :root[data-theme="dark"]{
-    --bg:#15130f; --bg-grad:#1d1a14; --panel:#211e18; --panel-2:#28241c;
-    --ink:#ece6d9; --muted:#a79c88; --line:#3a3428;
-    --accent:#a58bfb; --accent-ink:#171325; --accent-soft:#2c2440;
-    --danger:#f0847c; --danger-soft:#3a201d; --ok:#5fcf9a; --ok-soft:#1b3327;
-    --warn:#e3b165; --warn-soft:#3a2c12; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px -12px rgba(0,0,0,.55);
+    --bg:#0f1623; --bg-grad:#16203a; --panel:#172033; --panel-2:#1d2840;
+    --ink:#e6ecf7; --muted:#8fa0bd; --line:#2a3650;
+    --accent:#5b9dff; --accent-ink:#0b1426; --accent-soft:#1f3358;
+    --danger:#f0847c; --danger-soft:#3a2024; --ok:#5fcf9a; --ok-soft:#183328;
+    --warn:#e3b165; --warn-soft:#3a2c12; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Pretendard','Malgun Gothic',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     background:radial-gradient(1200px 600px at 10% -10%, var(--bg-grad), var(--bg));color:var(--ink);transition:background .2s ease,color .2s ease;}
   .wrap{max-width:880px;margin:0 auto;padding:28px 18px 60px;}
-  .notice{background:var(--warn-soft);border:1px solid #f0d9ad;color:#7a5412;padding:12px 14px;border-radius:12px;font-size:13px;margin-bottom:16px;line-height:1.55;}
+  .notice{background:var(--warn-soft);border:1px solid var(--line);color:var(--warn);padding:12px 14px;border-radius:12px;font-size:13px;margin-bottom:16px;line-height:1.55;}
   h1{font-size:23px;margin:0 0 4px;letter-spacing:-.01em;font-weight:800;}
   .sub{color:var(--muted);font-size:13px;margin-bottom:4px;}
   .badge-personal{display:inline-block;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:middle;margin-left:6px;}
@@ -32,7 +32,7 @@
   .tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
   .tab-btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:9px 16px;border-radius:11px;cursor:pointer;font-size:13.5px;font-weight:600;box-shadow:var(--shadow);transition:transform .12s ease, background .15s ease;}
   .tab-btn:hover{transform:translateY(-1px);}
-  .tab-btn.active{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .tab-btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow);}
   .card h3{margin:0 0 12px;font-size:15.5px;font-weight:800;}
   details.todo-group,details.exec-group{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;}
@@ -68,7 +68,7 @@
   textarea{min-height:64px;resize:vertical;}
   .row{display:flex;gap:10px;flex-wrap:wrap;}
   .row > div{flex:1;min-width:140px;}
-  button.btn{background:var(--ink);color:#fff;border:none;padding:9px 16px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:700;margin-top:12px;transition:transform .1s ease, opacity .15s ease;}
+  button.btn{background:var(--accent);color:var(--accent-ink);border:none;padding:9px 16px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:700;margin-top:12px;transition:transform .1s ease, opacity .15s ease;}
   button.btn:hover{transform:translateY(-1px);}
   button.btn.secondary{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);}
   button.btn.danger{background:var(--danger);}
@@ -80,7 +80,7 @@
   .btn-small{padding:7px 13px;font-size:12.5px;margin-top:0;}
   .list-item{border-top:1px solid var(--line);padding:10px 0;font-size:13px;}
   .list-item:first-child{border-top:none;}
-  .tag{display:inline-block;background:var(--accent-soft);color:#5b3fc0;border-radius:999px;padding:3px 10px;font-size:11px;margin-right:4px;font-weight:600;}
+  .tag{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:3px 10px;font-size:11px;margin-right:4px;font-weight:600;}
   .badge{display:inline-block;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;}
   .badge.done{background:var(--ok-soft);color:var(--ok);}
   .badge.todo{background:var(--accent-soft);color:var(--accent);}
@@ -101,7 +101,7 @@
   .err{color:var(--danger);font-size:12px;margin-top:8px;min-height:14px;}
   .err:empty{display:none;}
   .exec-actions{margin-top:6px;}
-  .carry{background:var(--accent-soft);border:1px solid #d9cdfb;border-radius:11px;padding:10px 12px;margin:10px 0;font-size:13px;}
+  .carry{background:var(--accent-soft);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:10px 0;font-size:13px;}
   .rule{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.7;}
 
   /* ---- 로그인/가입 화면 ---- */
@@ -112,9 +112,9 @@
   .auth-card{text-align:left;}
   .auth-tab-row{display:flex;gap:6px;background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:6px;}
   .auth-mode-btn{flex:1;background:transparent;border:none;padding:8px 0;border-radius:8px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;}
-  .auth-mode-btn.active{background:var(--ink);color:#fff;}
+  .auth-mode-btn.active{background:var(--accent);color:var(--accent-ink);}
   .auth-foot{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6;}
-  .import-card{background:var(--accent-soft);border-color:#d9cdfb;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;}
+  .import-card{background:var(--accent-soft);border-color:var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;}
 </style>
 </head>
 <body>
@@ -148,7 +148,7 @@
       <div style="text-align:right;">
         <button class="btn btn-ghost btn-small" id="btn-theme">🌙 다크</button>
         <button class="btn btn-ghost btn-small" id="btn-logout">로그아웃</button>
-        <button class="btn btn-ghost btn-small" id="btn-delete-account" style="color:#b3423a;border-color:#f0c9c3;">계정 삭제</button>
+        <button class="btn btn-ghost btn-small" id="btn-delete-account" style="color:var(--danger);">계정 삭제</button>
       </div>
     </div>
     <div id="import-box"></div>
@@ -237,7 +237,7 @@ let activeTab='plan', selectedPlanId=null, openDrill=null, busy=false;
 
 // ---------- 다크모드 (기본 다크, localStorage에 개인 취향만 저장 — 계정 데이터와 무관) ----------
 function initTheme(){
-  const t = localStorage.getItem('pds-theme') || 'dark';
+  let t = 'dark'; try{ t = localStorage.getItem('pds-theme') || 'dark'; }catch(e){}
   document.documentElement.setAttribute('data-theme', t);
   const btn = document.getElementById('btn-theme');
   if(btn) btn.textContent = t === 'dark' ? '🌙 다크' : '☀️ 라이트';
@@ -246,7 +246,7 @@ function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   const next = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('pds-theme', next);
+  try{ localStorage.setItem('pds-theme', next); }catch(e){}
   const btn = document.getElementById('btn-theme');
   if(btn) btn.textContent = next === 'dark' ? '🌙 다크' : '☀️ 라이트';
 }
@@ -627,7 +627,7 @@ function render(){
 function renderTabs(){
   const tabs = [['plan','계획'],['todo','할 일'],['exec','실행 기록'],['review','돌아보기'],['daily','5일 관찰']];
   $('#tabs').innerHTML = tabs.map(([k,l])=>'<button class="tab-btn '+(activeTab===k?'active':'')+'" data-tab="'+k+'">'+l+'</button>').join('')
-    + '<button class="tab-btn secondary" id="export-btn" style="margin-left:auto;background:#374151;">내보내기</button>';
+    + '<button class="tab-btn secondary" id="export-btn" style="margin-left:auto;">내보내기</button>';
 }
 
 function renderPlanTab(){
