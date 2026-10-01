@@ -13,9 +13,16 @@
     --warn:#b6791f; --warn-soft:#fdf3e2; --shadow:0 1px 2px rgba(43,38,32,.04),0 8px 24px -12px rgba(43,38,32,.12);
     --radius:16px;
   }
+  :root[data-theme="dark"]{
+    --bg:#15130f; --bg-grad:#1d1a14; --panel:#211e18; --panel-2:#28241c;
+    --ink:#ece6d9; --muted:#a79c88; --line:#3a3428;
+    --accent:#a58bfb; --accent-ink:#171325; --accent-soft:#2c2440;
+    --danger:#f0847c; --danger-soft:#3a201d; --ok:#5fcf9a; --ok-soft:#1b3327;
+    --warn:#e3b165; --warn-soft:#3a2c12; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px -12px rgba(0,0,0,.55);
+  }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Pretendard','Malgun Gothic',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    background:radial-gradient(1200px 600px at 10% -10%, var(--bg-grad), var(--bg));color:var(--ink);}
+    background:radial-gradient(1200px 600px at 10% -10%, var(--bg-grad), var(--bg));color:var(--ink);transition:background .2s ease,color .2s ease;}
   .wrap{max-width:880px;margin:0 auto;padding:28px 18px 60px;}
   .notice{background:var(--warn-soft);border:1px solid #f0d9ad;color:#7a5412;padding:12px 14px;border-radius:12px;font-size:13px;margin-bottom:16px;line-height:1.55;}
   h1{font-size:23px;margin:0 0 4px;letter-spacing:-.01em;font-weight:800;}
@@ -37,6 +44,24 @@
   details.todo-done-group>summary{font-size:12px;font-weight:600;}
   details.plan-more{margin-top:10px;}
   details.plan-more>summary{font-size:12.5px;font-weight:700;color:var(--accent);}
+  .cal-card{padding:14px 16px;}
+  .cal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .cal-head b{font-size:13.5px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-dow{margin-bottom:4px;}
+  .cal-dow div{text-align:center;font-size:11px;color:var(--muted);font-weight:700;}
+  .cal-cell{position:relative;aspect-ratio:1;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:12px;transition:transform .1s ease,border-color .15s ease;}
+  .cal-cell:hover{transform:translateY(-1px);border-color:var(--accent);}
+  .cal-cell.empty{visibility:hidden;cursor:default;}
+  .cal-cell.today{border-color:var(--accent);font-weight:800;}
+  .cal-cell.selected{background:var(--accent);color:var(--accent-ink);}
+  .cal-cell.has-data .cal-daynum{font-weight:800;}
+  .cal-dot{font-size:9px;background:var(--accent);color:var(--accent-ink);border-radius:999px;min-width:14px;padding:0 3px;line-height:14px;margin-top:2px;}
+  .cal-cell.selected .cal-dot{background:var(--panel);color:var(--accent);}
+  .progress-track{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;height:9px;overflow:hidden;margin-top:6px;}
+  .progress-fill{background:var(--accent);height:100%;border-radius:999px;transition:width .3s ease;}
+  .summary-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow);font-size:13px;}
+  .summary-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
   label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px;font-weight:600;}
   input,select,textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 11px;font-size:13.5px;font-family:inherit;transition:border-color .15s ease, box-shadow .15s ease;}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
@@ -121,11 +146,13 @@
         <div class="sub" id="whoami"></div>
       </div>
       <div style="text-align:right;">
+        <button class="btn btn-ghost btn-small" id="btn-theme">🌙 다크</button>
         <button class="btn btn-ghost btn-small" id="btn-logout">로그아웃</button>
         <button class="btn btn-ghost btn-small" id="btn-delete-account" style="color:#b3423a;border-color:#f0c9c3;">계정 삭제</button>
       </div>
     </div>
     <div id="import-box"></div>
+    <div id="today-summary"></div>
     <div class="tabs" id="tabs"></div>
     <div id="app"><p class="muted">불러오는 중...</p></div>
     <details class="card">
@@ -207,6 +234,97 @@ function cmpTodo(a,b,mode){
 
 let STATE = {plans:[], todos:[], executions:[], carryovers:[], rule_changes:[]};
 let activeTab='plan', selectedPlanId=null, openDrill=null, busy=false;
+
+// ---------- 다크모드 (기본 다크, localStorage에 개인 취향만 저장 — 계정 데이터와 무관) ----------
+function initTheme(){
+  const t = localStorage.getItem('pds-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('btn-theme');
+  if(btn) btn.textContent = t === 'dark' ? '🌙 다크' : '☀️ 라이트';
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('pds-theme', next);
+  const btn = document.getElementById('btn-theme');
+  if(btn) btn.textContent = next === 'dark' ? '🌙 다크' : '☀️ 라이트';
+}
+initTheme();
+
+// ---------- 달력(월간) — 계획/할 일/실행 기록 탭에서 날짜 클릭으로 그 날 기록만 보기 ----------
+let calState = { plan:null, todo:null, exec:null };
+function shiftMonth(ymStr, delta){
+  const [y,m] = ymStr.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m-1+delta, 1));
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
+}
+function daysInMonth(ymStr){ const [y,m]=ymStr.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate(); }
+function firstWeekday(ymStr){ const [y,m]=ymStr.split('-').map(Number); return new Date(Date.UTC(y,m-1,1)).getUTCDay(); }
+function addDaysStr(ds, n){ const d = new Date(ds+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function initCal(tab){ if(!calState[tab]) calState[tab] = { month: todayKST().slice(0,7), day: null }; }
+function calCounts(tab){
+  const map = {};
+  const inc = d => { map[d] = (map[d]||0)+1; };
+  if(tab==='plan'){
+    STATE.plans.forEach(p=>{
+      let cur = p.current.period_start, end = p.current.period_end, guard=0;
+      if(!cur || !end || cur > end){ if(cur) inc(cur); return; }
+      while(cur <= end && guard < 370){ inc(cur); if(cur===end) break; cur = addDaysStr(cur,1); guard++; }
+    });
+  } else if(tab==='todo'){
+    STATE.todos.forEach(t=>{ inc(t.deadline || kstDate(t.created_at)); });
+  } else if(tab==='exec'){
+    STATE.executions.forEach(e=>{ inc(kstDate(e.start_at)); });
+  }
+  return map;
+}
+function calendarHTML(tab){
+  initCal(tab);
+  const st = calState[tab];
+  const counts = calCounts(tab);
+  const [y,m] = st.month.split('-').map(Number);
+  const first = firstWeekday(st.month), total = daysInMonth(st.month), today = todayKST();
+  let cells = '';
+  for(let i=0;i<first;i++) cells += '<div class="cal-cell empty"></div>';
+  for(let d=1; d<=total; d++){
+    const ds = st.month+'-'+String(d).padStart(2,'0');
+    const cnt = counts[ds]||0;
+    const cls = ['cal-cell'];
+    if(ds===today) cls.push('today');
+    if(ds===st.day) cls.push('selected');
+    if(cnt>0) cls.push('has-data');
+    cells += '<div class="'+cls.join(' ')+'" data-cal-day="'+ds+'" data-cal-tab="'+tab+'">'
+      + '<span class="cal-daynum">'+d+'</span>'
+      + (cnt>0 ? '<span class="cal-dot">'+(cnt>9?'9+':cnt)+'</span>' : '')
+      + '</div>';
+  }
+  return '<div class="card cal-card">'
+    + '<div class="cal-head"><button type="button" class="btn small secondary" data-cal-prev="'+tab+'">◀</button>'
+    + '<b>'+y+'년 '+m+'월</b>'
+    + '<button type="button" class="btn small secondary" data-cal-next="'+tab+'">▶</button>'
+    + (st.day ? '<button type="button" class="btn small secondary" data-cal-clear="'+tab+'" style="margin-left:auto;">전체 보기</button>' : '')
+    + '</div>'
+    + '<div class="cal-grid cal-dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>'
+    + '<div class="cal-grid">'+cells+'</div>'
+    + (st.day ? '<div class="muted" style="margin-top:8px;">'+st.day+' 선택됨 — 아래 목록이 이 날짜 기준으로 걸러집니다.</div>' : '<div class="muted" style="margin-top:8px;">날짜를 누르면 그 날 기록만 볼 수 있어요. 점이 있는 날은 기록이 있는 날입니다.</div>')
+    + '</div>';
+}
+
+// ---------- 오늘 요약(진행률) — 매 렌더링 시 "오늘" 기준으로 다시 계산되므로 날짜가 바뀌면 자동으로 갱신됨 ----------
+function todaySummaryHTML(){
+  const today = todayKST();
+  const dueToday = STATE.todos.filter(t=>t.deadline===today);
+  const doneToday = dueToday.filter(t=>t.status==='done');
+  const pct = dueToday.length ? Math.round(doneToday.length/dueToday.length*100) : 0;
+  const execToday = STATE.executions.filter(e=>kstDate(e.start_at)===today);
+  const minToday = execToday.reduce((s,e)=>s+(e.actual_minutes||0),0);
+  if(!dueToday.length && !execToday.length) return '';
+  return '<div class="summary-card"><div class="summary-row"><b>오늘('+today+') 요약</b>'
+    + '<span class="muted">마감 할 일 '+doneToday.length+'/'+dueToday.length+' · 오늘 실행 '+fmtMin(minToday)+'</span></div>'
+    + (dueToday.length ? '<div class="progress-track"><div class="progress-fill" style="width:'+pct+'%;"></div></div>' : '')
+    + '</div>';
+}
 // 저장 직후 0.6초는 입력을 받지 않는다: 빠른 더블클릭의 두 번째 클릭이 새로 그려진 '되돌리기' 버튼에 눌리는 것을 막음
 let lockUntil = 0;
 let todoFilters = {plan:'all', status:'all', q:'', sort:'created'};
@@ -495,6 +613,7 @@ async function addCarryover(note, planId){
 // ---------- render ----------
 function render(){
   renderTabs();
+  const sumEl = document.getElementById('today-summary'); if(sumEl) sumEl.innerHTML = todaySummaryHTML();
   const app = $('#app');
   if(activeTab==='plan') app.innerHTML = renderPlanTab();
   else if(activeTab==='todo') app.innerHTML = renderTodoTab();
@@ -527,8 +646,14 @@ function renderPlanTab(){
     + '<div><label>예상 시간(시간)</label><input type="number" name="estimated_hours" min="0" step="0.5" required></div></div>'
     + '<label>성공 기준</label><textarea name="success_criteria" required placeholder="무엇이 되면 성공인지"></textarea>'
     + '<button class="btn" type="submit">계획 저장</button></form></div>';
+  html += calendarHTML('plan');
   if(!STATE.plans.length){ html += '<div class="card muted">아직 등록한 계획이 없습니다.</div>'; }
-  STATE.plans.slice().sort((a,b)=>b.created_at-a.created_at).forEach((p,idx)=>{
+  const calDayPlan = calState.plan && calState.plan.day;
+  const planList = calDayPlan
+    ? STATE.plans.filter(p=>p.current.period_start<=calDayPlan && calDayPlan<=p.current.period_end)
+    : STATE.plans;
+  if(calDayPlan && !planList.length){ html += '<div class="card muted">'+calDayPlan+'에 해당하는 계획이 없습니다.</div>'; }
+  planList.slice().sort((a,b)=>b.created_at-a.created_at).forEach((p,idx)=>{
     const todoCount = STATE.todos.filter(t=>t.plan_id===p.id).length;
     const openAttr = idx<2 ? ' open' : '';
     html += '<div class="card"><h3>'+esc(p.current.title)+' <span class="muted">('+todoCount+'개 할 일)</span></h3>'
@@ -568,6 +693,8 @@ function filteredTodos(){
   if(todoFilters.status!=='all') items = items.filter(t=>t.status===todoFilters.status);
   const q = todoFilters.q.trim().toLowerCase();
   if(q) items = items.filter(t=>(t.title+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q));
+  const calDay = calState.todo && calState.todo.day;
+  if(calDay) items = items.filter(t=>(t.deadline || kstDate(t.created_at))===calDay);
   return items.sort((a,b)=>cmpTodo(a,b,todoFilters.sort));
 }
 function todoCardHTML(t){
@@ -634,6 +761,7 @@ function renderTodoTab(){
       + '<button class="btn" type="submit">할 일 추가</button></form>';
   }
   html += '</div>';
+  html += calendarHTML('todo');
   html += '<div class="card"><div class="row">'
     + '<div><label>계획 필터</label><select id="f-plan"><option value="all">전체</option>'
     + STATE.plans.map(p=>'<option value="'+p.id+'"'+(todoFilters.plan===p.id?' selected':'')+'>'+esc(p.current.title)+'</option>').join('') + '</select></div>'
@@ -682,11 +810,16 @@ function renderExecTab(){
       + '<button class="btn" type="submit" data-mode="complete">완료로 처리</button></div></form>';
   }
   html += '</div>';
+  html += calendarHTML('exec');
+  const calDayExec = calState.exec && calState.exec.day;
   // 할 일별로 묶고, 최근 활동한 순서로 정렬 — 예전 기록은 접어 두어 화면이 길게 이어지지 않게 함
   const groupsExec = STATE.todos.map(t=>{
-    const execs = STATE.executions.filter(e=>e.todo_id===t.id).sort((a,b)=>b.start_at-a.start_at);
+    let execs = STATE.executions.filter(e=>e.todo_id===t.id);
+    if(calDayExec) execs = execs.filter(e=>kstDate(e.start_at)===calDayExec);
+    execs = execs.sort((a,b)=>b.start_at-a.start_at);
     return {t, execs};
   }).filter(x=>x.execs.length).sort((a,b)=>b.execs[0].start_at-a.execs[0].start_at);
+  if(calDayExec && !groupsExec.length){ html += '<div class="card muted">'+calDayExec+'에 실행 기록이 없습니다.</div>'; }
   groupsExec.forEach((x,idx)=>{
     const t = x.t, execs = x.execs;
     const plan = STATE.plans.find(p=>p.id===t.plan_id);
@@ -814,6 +947,12 @@ function guard(fn){ return async function(){ if(busy || Date.now() < lockUntil){
 function bindEvents(){
   $$('#tabs .tab-btn[data-tab]').forEach(b=>b.onclick=()=>{ activeTab=b.dataset.tab; render(); });
   const exportBtn = document.getElementById('export-btn'); if(exportBtn) exportBtn.onclick = doExport;
+  const themeBtn = document.getElementById('btn-theme'); if(themeBtn) themeBtn.onclick = toggleTheme;
+
+  $$('[data-cal-day]').forEach(el=>el.onclick=()=>{ const tab=el.dataset.calTab, day=el.dataset.calDay; initCal(tab); calState[tab].day = (calState[tab].day===day ? null : day); render(); });
+  $$('[data-cal-prev]').forEach(el=>el.onclick=()=>{ const tab=el.dataset.calPrev; initCal(tab); calState[tab].month = shiftMonth(calState[tab].month,-1); render(); });
+  $$('[data-cal-next]').forEach(el=>el.onclick=()=>{ const tab=el.dataset.calNext; initCal(tab); calState[tab].month = shiftMonth(calState[tab].month,1); render(); });
+  $$('[data-cal-clear]').forEach(el=>el.onclick=()=>{ const tab=el.dataset.calClear; calState[tab].day = null; render(); });
 
   const planForm = $('#plan-form');
   if(planForm) planForm.onsubmit = guard(async (e)=>{ e.preventDefault(); const fd=new FormData(planForm);
