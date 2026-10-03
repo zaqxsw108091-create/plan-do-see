@@ -232,7 +232,9 @@ function cmpTodo(a,b,mode){
   return r || String(a.id).localeCompare(String(b.id));
 }
 
-let STATE = {plans:[], todos:[], executions:[], carryovers:[], rule_changes:[]};
+let STATE = {plans:[], todos:[], executions:[], carryovers:[], rule_changes:[], settings:[]};
+// 관찰 시작일(1일차): 5일 관찰은 이 날짜부터 센다. 설정한 시각도 함께 남는다.
+function obsStart(){ const o = STATE.settings.find(x=>x.id==='observation'); return o ? o.start_date : null; }
 let activeTab='plan', selectedPlanId=null, openDrill=null, busy=false;
 
 // ---------- 다크모드 (기본 다크, localStorage에 개인 취향만 저장 — 계정 데이터와 무관) ----------
@@ -461,13 +463,16 @@ function computeDailyDigest(){
     if(!t.deadline) return;
     estByDay[t.deadline] = (estByDay[t.deadline]||0) + (Number(t.estimated_minutes)||0); // 값이 비어있으면 0
   });
-  const days = Array.from(new Set([...Object.keys(actualByDay), ...Object.keys(estByDay)])).sort();
+  const os = obsStart();
+  const days = Array.from(new Set([...Object.keys(actualByDay), ...Object.keys(estByDay)])).sort().filter(d=>!os || d>=os);
   return days.map(d=>{
     const actual = actualByDay[d]||0, est = estByDay[d]||0, diff = actual-est;
     return {date:d, actual, est, diff, outlier: actual>1200};
   });
 }
 // 규칙 해제: 기록을 지우지 않고 '해제 시각'만 남긴다(적용 기간이 증거로 남도록 소프트 삭제).
+function obsExecDates(){ const os = obsStart(); return Array.from(new Set(STATE.executions.map(e=>kstDate(e.start_at)))).sort().filter(d=>!os || d>=os); }
+async function setObsStart(date){ await setDoc(doc(col('settings'),'observation'), {id:'observation', start_date:date, set_at: now()}); await refreshAll(); }
 async function releaseRule(id){
   const r = STATE.rule_changes.find(x=>x.id===id); if(!r || r.ended_at) return;
   await setDoc(doc(col('rule_changes'), id), Object.assign({}, r, {ended_at: now()}));
@@ -475,11 +480,12 @@ async function releaseRule(id){
 }
 async function addRuleChange(reason, autoTag){
   const id = genId();
-  await setDoc(doc(col('rule_changes'), id), {id, reason:String(reason||'').trim(), changed_at: now(), auto_tag: !!autoTag, ended_at: null});
+  const beforeDays = obsExecDates().filter(d=>d<=todayKST());
+  await setDoc(doc(col('rule_changes'), id), {id, reason:String(reason||'').trim(), changed_at: now(), auto_tag: !!autoTag, ended_at: null, before_days: beforeDays});
   await refreshAll();
 }
 async function deleteAllMyData(){
-  const names = ['plans','todos','executions','carryovers','rule_changes'];
+  const names = ['plans','todos','executions','carryovers','rule_changes','settings'];
   const cols = await Promise.all(names.map(n=>getDocs(col(n))));
   const batch = writeBatch(db);
   cols.forEach((snap,i)=> snap.docs.forEach(d=> batch.delete(doc(col(names[i]), d.id))));
@@ -488,18 +494,20 @@ async function deleteAllMyData(){
 
 async function refreshAll(){
   if(!uid) return;
-  const [ps, ts, es, cs, rs] = await Promise.all([
+  const [ps, ts, es, cs, rs, ss] = await Promise.all([
     getDocs(col('plans')),
     getDocs(col('todos')),
     getDocs(col('executions')),
     getDocs(col('carryovers')),
     getDocs(col('rule_changes')),
+    getDocs(col('settings')),
   ]);
   STATE.plans = ps.docs.map(d=>d.data());
   STATE.todos = ts.docs.map(d=>d.data());
   STATE.executions = es.docs.map(d=>d.data());
   STATE.carryovers = cs.docs.map(d=>d.data());
   STATE.rule_changes = rs.docs.map(d=>d.data()).sort((a,b)=>a.changed_at-b.changed_at);
+  STATE.settings = ss.docs.map(d=>d.data());
   busy = false;
   lockUntil = Date.now() + 600;
   render();
@@ -531,9 +539,10 @@ async function editPlan(id,d){
 async function addTodo(d){
   const id=genId(); const t=now();
   const data = {id, plan_id:d.plan_id, title:d.title, created_at:t, updated_at:t, deadline:d.deadline||null, priority:d.priority, tags:d.tags||[], estimated_minutes:d.estimated_minutes||0, status:'todo', completed_at:null};
-  // 계획 규칙(5일 관찰): 마감일이 '오늘'인 할 일을 오늘 만들면 전날 계획이 아니므로 '추가' 태그를 자동으로 붙인다.
+  // 계획 규칙(5일 관찰): 규칙이 적용 중이면, 계획을 만든 뒤 1시간이 지나서 추가한 할 일에 '추가' 태그를 자동으로 붙인다.
   const tagRuleOn = STATE.rule_changes.some(r=>r.auto_tag && !r.ended_at);
-  if(tagRuleOn && data.deadline===todayKST() && !data.tags.includes('추가')) data.tags = data.tags.concat(['추가']);
+  const parentPlan = STATE.plans.find(p=>p.id===data.plan_id);
+  if(tagRuleOn && parentPlan && (t - parentPlan.original.created_at) > 60*60*1000 && !data.tags.includes('추가')) data.tags = data.tags.concat(['추가']);
   await setDoc(doc(col('todos'), id), data);
   await refreshAll();
 }
@@ -767,7 +776,7 @@ function renderTodoTab(){
       + '<div><label>우선순위</label><select name="priority"><option value="high">높음</option><option value="mid" selected>보통</option><option value="low">낮음</option></select></div>'
       + '<div><label>예상 시간(분)</label><input type="number" name="estimated_minutes" min="0"></div></div>'
       + '<label>태그(쉼표로 구분)</label><input name="tags" placeholder="예: 알고리즘, 자격증">'
-      + '<div class="muted" style="margin-top:6px;">5일 관찰 탭에서 \'추가 태그 자동\' 규칙이 적용 중이면, 마감일이 오늘인 할 일을 오늘 만들 때 \'추가\' 태그가 자동으로 붙습니다.</div>'
+      + '<div class="muted" style="margin-top:6px;">5일 관찰 탭에서 \'추가 태그 자동\' 규칙이 적용 중이면, 계획을 만든 지 1시간이 지나서 추가한 할 일에 \'추가\' 태그가 자동으로 붙습니다.</div>'
       + '<button class="btn" type="submit">할 일 추가</button></form>';
   }
   html += '</div>';
@@ -866,6 +875,16 @@ function renderDailyTab(){
     + '<b>주 시작 요일</b> · '+esc(DAILY_METRIC.weekStart)
     + '</div></div>';
 
+  (function(){
+    const os = obsStart();
+    const o = STATE.settings.find(x=>x.id==='observation');
+    const suggest = addDaysStr(todayKST(), -2);
+    html += '<div class="card"><h3>관찰 1일차 정하기</h3>'
+      + (os ? '<div class="rule">관찰 1일차: <b>'+esc(os)+'</b> (설정 시각 '+fmtDT(o.set_at)+')<br>이 날짜 이전 기록은 관찰 전 연습 기록이라 아래 5일 관찰에서 제외됩니다.</div>'
+            : '<div class="muted">아직 안 정했습니다. 정하기 전에는 계정의 모든 날짜가 아래에 나옵니다.</div>')
+      + '<button type="button" class="btn small secondary" id="btn-obs-start" data-date="'+suggest+'" style="margin-top:8px;">관찰 1일차를 '+suggest+'(오늘 기준 2일 전)로 정하기</button>'
+      + '</div>';
+  })();
   html += '<div class="card"><h3>날짜별 기록 ('+digest.length+'일)</h3>';
   if(!digest.length){ html += '<div class="muted">아직 기록이 없습니다.</div>'; }
   else {
@@ -879,11 +898,16 @@ function renderDailyTab(){
 
   html += '<div class="card"><h3>계획 규칙 변경 기록</h3>'
     + '<div class="muted">2일차 기록 뒤, 3일차 기록 앞에 규칙을 하나만 바꾸고 이유를 적으세요. (예: "지연 판정 기준을 마감일 당일까지 허용으로 바꿈")</div>'
+    + (STATE.rule_changes.some(r=>r.auto_tag && !r.ended_at) ? ''
+      : '<button type="button" class="btn" id="btn-rule-preset" style="width:100%;margin:10px 0 6px;">▶ 규칙 켜기: 계획 만들고 1시간 넘어서 추가한 할 일에 \'추가\' 태그 (버튼 한 번)</button>'
+        + (function(){ const ds = obsExecDates(); const n = ds.length; return (obsStart() && n===2 && ds[1]<todayKST()) ? '<div class="muted" style="color:var(--ok);">관찰 실행 기록이 2일치('+esc(ds.join(', '))+')이고 오늘 기록은 아직 없어서 "2일차 뒤·3일차 앞" 조건에 맞는 시점입니다.</div>' : '<div class="muted" style="color:var(--warn);">주의: 관찰 1일차 이후 실행 기록 날짜가 '+n+'일'+(obsStart()?'':' (관찰 1일차를 아직 안 정했습니다)')+'입니다. 과제 조건(T07-C09)은 실행 기록이 2일치일 때(3일차 기록을 넣기 전에) 규칙을 바꾸는 것입니다.</div>'; })()
+        + '<div class="muted" style="margin-bottom:10px;">누르면 지금 시각과 1·2일차 날짜가 함께 기록되고, 이후 계획을 만든 지 1시간이 지나서 추가한 할 일에 \'추가\' 태그가 자동으로 붙습니다. 아래 칸은 다른 규칙을 직접 적고 싶을 때만 쓰세요.</div>')
     + '<form id="rule-change-form"><input name="reason" placeholder="무엇을, 왜 바꿨는지" required>'
-    + '<label class="check"><input type="checkbox" name="auto_tag" checked> 이 규칙 적용 중에는 마감일이 오늘인 할 일을 오늘 만들면 \'추가\' 태그를 자동으로 붙임</label>'
+    + '<label class="check"><input type="checkbox" name="auto_tag" checked> 이 규칙 적용 중에는 계획을 만든 지 1시간이 지나서 추가한 할 일에 \'추가\' 태그를 자동으로 붙임</label>'
     + '<div class="err" role="alert"></div><button class="btn small" type="submit">규칙 변경 기록</button></form>';
   if(STATE.rule_changes.length){
     html += STATE.rule_changes.map(r=>'<div class="list-item">'+fmtDT(r.changed_at)+' — '+esc(r.reason)+' '
+      + ((r.before_days&&r.before_days.length) ? '<div class="muted">변경 전 기록 날짜: '+r.before_days.map((d,i)=>(i+1)+'일차 '+esc(d)).join(', ')+'</div>' : '')
       + (r.ended_at ? '<span class="badge done">해제됨 '+fmtDT(r.ended_at)+'</span>' : '<span class="badge todo">적용 중'+(r.auto_tag?' · 추가 태그 자동':'')+'</span> <button type="button" class="btn small secondary" data-release-rule="'+r.id+'">규칙 해제</button>')
       + '</div>').join('');
   } else {
@@ -1043,6 +1067,11 @@ function bindEvents(){
     const reason = String(new FormData(ruleChangeForm).get('reason')||'').trim();
     if(!reason){ showFormError(ruleChangeForm, '무엇을 왜 바꿨는지 적어주세요.'); busy=false; return; }
     await addRuleChange(reason, new FormData(ruleChangeForm).get('auto_tag')==='on'); });
+  const obsBtn = document.getElementById('btn-obs-start');
+  if(obsBtn) obsBtn.onclick = guard(async ()=>{ await setObsStart(obsBtn.dataset.date); });
+  const presetBtn = document.getElementById('btn-rule-preset');
+  if(presetBtn) presetBtn.onclick = guard(async ()=>{
+    await addRuleChange('계획을 만든 뒤 1시간이 지나서 추가한 할 일에는 \'추가\' 태그를 붙인다 (기존은 구분 없이 입력). 이유: 계획할 때 넣은 일과 나중에 생긴 일을 구분해서, 예상과 실제 차이가 어디서 생기는지 보려고', true); });
   $$('[data-release-rule]').forEach(b=>b.onclick=guard(async ()=>{
     if(!confirm('이 규칙을 해제할까요? 기록은 남고 해제 시각만 추가됩니다. (해제는 규칙을 한 번 더 바꾸는 것이니 신중히 하세요)')){ busy=false; return; }
     await releaseRule(b.dataset.releaseRule); }));
